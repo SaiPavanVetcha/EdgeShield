@@ -32,6 +32,9 @@ def insert_telemetry_to_databricks(payload: dict):
     ram = metrics.get("ram", {})
     disk = metrics.get("disk", {})
     battery = metrics.get("battery", {})
+    
+    # Handle both dht11 and dht22 keys safely
+    dht_data = metrics.get("dht11") or metrics.get("dht22") or {}
 
     with get_connection() as connection:
         with connection.cursor() as cursor:
@@ -131,3 +134,20 @@ def insert_telemetry_to_databricks(payload: dict):
                     battery.get("health_percentage"),
                 ),
             )
+
+            # 6. Insert into environment_metrics (ESP32 Sensor Data)
+            if dht_data:
+                cursor.execute(
+                    """
+                    INSERT INTO edgeshield_db.environment_metrics
+                    (event_id, device_id, timestamp, temperature_c, humidity_percent)
+                    VALUES (?, ?, CAST(? AS TIMESTAMP), ?, ?)
+                    """,
+                    (
+                        event_id,
+                        device_id,
+                        timestamp,
+                        dht_data.get("temperature_c"),
+                        dht_data.get("humidity_percent"),
+                    ),
+                )
