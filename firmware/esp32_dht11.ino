@@ -72,7 +72,6 @@ void loop() {
   StaticJsonDocument<512> doc;
   doc["device_id"] = "ESP32-ENV-01";
   doc["hostname"]  = "esp32-dht11-node";
-  doc["timestamp"] = "2026-10-15T21:56:00Z";
 
   JsonObject metrics = doc.createNestedObject("metrics");
   JsonObject dht11 = metrics.createNestedObject("dht11");

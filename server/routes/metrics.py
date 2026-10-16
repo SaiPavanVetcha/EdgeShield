@@ -10,13 +10,14 @@ async def receive_metrics(request: Request, background_tasks: BackgroundTasks):
     try:
         data = await request.json()
 
-        if not data.get("device_id") or not data.get("timestamp"):
+        # Only device_id is required now
+        if not data.get("device_id"):
             raise HTTPException(
                 status_code=400,
-                detail="Invalid payload: missing device_id or timestamp",
+                detail="Invalid payload: missing device_id",
             )
 
-        # Offload Databricks I/O write operation to a background thread for faster API response
+        # Offload Databricks I/O write operation to a background thread
         background_tasks.add_task(insert_telemetry_to_databricks, data)
 
         return {
