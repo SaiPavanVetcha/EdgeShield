@@ -10,7 +10,8 @@ async def receive_metrics(request: Request, background_tasks: BackgroundTasks):
     try:
         data = await request.json()
 
-        if not data.get("device_id") or not data.get("timestamp"):
+        # Only device_id is required now (timestamp is set by the server)
+        if not data.get("device_id"):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid payload: missing device_id",
