@@ -3,7 +3,7 @@ import time
 from datetime import datetime, timezone
 import requests
 
-from server.config import DEVICE_ID, SAMPLING_INTERVAL, SERVER_URL
+from config import DEVICE_ID, SAMPLING_INTERVAL, SERVER_URL
 from collectors import (
     collect_battery_metrics,
     collect_cpu_metrics,

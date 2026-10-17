@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import datetime, timezone
 from databricks import sql
 from dotenv import load_dotenv
 
@@ -20,22 +21,35 @@ def get_connection():
 
 
 def insert_telemetry_to_databricks(payload: dict):
-    """Parses nested telemetry metrics and inserts into separate Delta tables."""
+    """
+    Parses nested telemetry metrics and inserts only the sections that contain data.
+    Uses a single transaction + proper error handling.
+    Always uses server-side UTC timestamp.
+    """
     event_id = str(uuid.uuid4())
     device_id = payload.get("device_id")
     hostname = payload.get("hostname")
-    timestamp = payload.get("timestamp")
-    metrics = payload.get("metrics", {})
+    timestamp = datetime.now(timezone.utc).isoformat()   # server always sets the time
 
-    system = metrics.get("system", {})
-    cpu = metrics.get("cpu", {})
-    ram = metrics.get("ram", {})
-    disk = metrics.get("disk", {})
-    battery = metrics.get("battery", {})
+    metrics = payload.get("metrics", {}) or {}
 
-    with get_connection() as connection:
-        with connection.cursor() as cursor:
-            # 1. Insert into system_metrics
+    system = metrics.get("system") or {}
+    cpu = metrics.get("cpu") or {}
+    ram = metrics.get("ram") or {}
+    disk = metrics.get("disk") or {}
+    battery = metrics.get("battery") or {}
+    dht_data = metrics.get("dht11") or metrics.get("dht22") or {}
+
+    connection = None
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        # Start an explicit transaction
+        # (Databricks SQL connector supports commit/rollback)
+
+        # 1. System metrics (only if we have meaningful data)
+        if system:
             cursor.execute(
                 """
                 INSERT INTO edgeshield_db.system_metrics 
@@ -52,11 +66,13 @@ def insert_telemetry_to_databricks(payload: dict):
                 ),
             )
 
-            # 2. Insert into cpu_metrics
+        # 2. CPU metrics
+        if cpu:
             cursor.execute(
                 """
                 INSERT INTO edgeshield_db.cpu_metrics 
-                (event_id, device_id, timestamp, utilization_percent, logical_cores, physical_cores, frequency_current_mhz, frequency_max_mhz)
+                (event_id, device_id, timestamp, utilization_percent, logical_cores, 
+                 physical_cores, frequency_current_mhz, frequency_max_mhz)
                 VALUES (?, ?, CAST(? AS TIMESTAMP), ?, ?, ?, ?, ?)
                 """,
                 (
@@ -71,11 +87,13 @@ def insert_telemetry_to_databricks(payload: dict):
                 ),
             )
 
-            # 3. Insert into ram_metrics
+        # 3. RAM metrics
+        if ram:
             cursor.execute(
                 """
                 INSERT INTO edgeshield_db.ram_metrics 
-                (event_id, device_id, timestamp, total_bytes, used_bytes, available_bytes, utilization_percent, available_mb)
+                (event_id, device_id, timestamp, total_bytes, used_bytes, available_bytes, 
+                 utilization_percent, available_mb)
                 VALUES (?, ?, CAST(? AS TIMESTAMP), ?, ?, ?, ?, ?)
                 """,
                 (
@@ -90,11 +108,13 @@ def insert_telemetry_to_databricks(payload: dict):
                 ),
             )
 
-            # 4. Insert into disk_metrics
+        # 4. Disk metrics
+        if disk:
             cursor.execute(
                 """
                 INSERT INTO edgeshield_db.disk_metrics 
-                (event_id, device_id, timestamp, mount_point, total_bytes, used_bytes, free_bytes, free_gb, utilization_percent, read_bytes, write_bytes)
+                (event_id, device_id, timestamp, mount_point, total_bytes, used_bytes, 
+                 free_bytes, free_gb, utilization_percent, read_bytes, write_bytes)
                 VALUES (?, ?, CAST(? AS TIMESTAMP), ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -112,11 +132,13 @@ def insert_telemetry_to_databricks(payload: dict):
                 ),
             )
 
-            # 5. Insert into battery_metrics
+        # 5. Battery metrics
+        if battery:
             cursor.execute(
                 """
                 INSERT INTO edgeshield_db.battery_metrics 
-                (event_id, device_id, timestamp, present, percent, power_plugged, design_capacity_raw, full_charge_capacity_raw, health_percentage)
+                (event_id, device_id, timestamp, present, percent, power_plugged, 
+                 design_capacity_raw, full_charge_capacity_raw, health_percentage)
                 VALUES (?, ?, CAST(? AS TIMESTAMP), ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -131,3 +153,40 @@ def insert_telemetry_to_databricks(payload: dict):
                     battery.get("health_percentage"),
                 ),
             )
+
+        # 6. Environment metrics (ESP32)
+        if dht_data:
+            cursor.execute(
+                """
+                INSERT INTO edgeshield_db.environment_metrics
+                (event_id, device_id, timestamp, temperature_c, humidity_percent)
+                VALUES (?, ?, CAST(? AS TIMESTAMP), ?, ?)
+                """,
+                (
+                    event_id,
+                    device_id,
+                    timestamp,
+                    dht_data.get("temperature_c"),
+                    dht_data.get("humidity_percent"),
+                ),
+            )
+
+        # Commit only if everything succeeded
+        connection.commit()
+        print(f"[+] Successfully inserted telemetry for device={device_id} event_id={event_id}")
+
+    except Exception as e:
+        if connection:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+        print(f"[!] Failed to insert telemetry for device={device_id}: {e}")
+        raise   # re-raise so the background task / caller can see it
+
+    finally:
+        if connection:
+            try:
+                connection.close()
+            except Exception:
+                pass
