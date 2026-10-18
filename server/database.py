@@ -29,7 +29,7 @@ def insert_telemetry_to_databricks(payload: dict):
     event_id = str(uuid.uuid4())
     device_id = payload.get("device_id")
     hostname = payload.get("hostname")
-    timestamp = datetime.now(timezone.utc).isoformat()   # server always sets the time
+    timestamp = datetime.now(timezone.utc).isoformat()
 
     metrics = payload.get("metrics", {}) or {}
 
@@ -40,15 +40,16 @@ def insert_telemetry_to_databricks(payload: dict):
     battery = metrics.get("battery") or {}
     dht_data = metrics.get("dht11") or metrics.get("dht22") or {}
 
+    if not any([system, cpu, ram, disk, battery, dht_data]):
+        print(f"[!] No metric data found for device={device_id}. Skipping insert.")
+        return
+
     connection = None
     try:
         connection = get_connection()
         cursor = connection.cursor()
 
-        # Start an explicit transaction
-        # (Databricks SQL connector supports commit/rollback)
-
-        # 1. System metrics (only if we have meaningful data)
+        # 1. System metrics
         if system:
             cursor.execute(
                 """
@@ -171,7 +172,6 @@ def insert_telemetry_to_databricks(payload: dict):
                 ),
             )
 
-        # Commit only if everything succeeded
         connection.commit()
         print(f"[+] Successfully inserted telemetry for device={device_id} event_id={event_id}")
 
@@ -182,7 +182,7 @@ def insert_telemetry_to_databricks(payload: dict):
             except Exception:
                 pass
         print(f"[!] Failed to insert telemetry for device={device_id}: {e}")
-        raise   # re-raise so the background task / caller can see it
+        raise
 
     finally:
         if connection:
