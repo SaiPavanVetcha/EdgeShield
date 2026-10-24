@@ -157,7 +157,6 @@ dp.create_streaming_table(
 
 @dp.temporary_view()
 @dp.expect_or_drop("valid_device", "device_id IS NOT NULL")
-@dp.expect_or_drop("valid_health", "health_percentage BETWEEN 0 AND 100")
 def battery_metrics_silver_cleaned():
     return (
         dp.read_stream(f"{TARGET_CATALOG}.{BRONZE_SCHEMA}.battery_metrics")
