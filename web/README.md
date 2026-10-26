@@ -9,7 +9,7 @@ A clean, production-grade edge telemetry monitoring dashboard and API built from
 ```
                       ┌──────────────────────────────────────────────┐
                       │          Databricks Lakehouse                │
-                      │         (Catalog: edgeshield_lakehouse)       │
+                      │         (Catalog: edgeshield_lakehouse)      │
                       │               Schema: gold                   │
                       │ ──────────────────────────────────────────── │
                       │ • dim_device                                 │
@@ -17,7 +17,7 @@ A clean, production-grade edge telemetry monitoring dashboard and API built from
                       │ • fact_ram_telemetry                         │
                       │ • fact_disk_telemetry                        │
                       │ • fact_battery_telemetry                     │
-                      │ • fact_environment_telemetry                │
+                      │ • fact_environment_telemetry                 │
                       └──────────────────────┬───────────────────────┘
                                              │ SQL over HTTP
                                              ▼
