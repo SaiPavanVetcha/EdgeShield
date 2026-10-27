@@ -29,14 +29,14 @@ export const KPICard: React.FC<KPICardProps> = ({
   const getStatusBadge = () => {
     if (kpi.status === 'critical') {
       return (
-        <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/30">
+        <span className="text-[9.5px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/30 shrink-0">
           Critical
         </span>
       );
     }
     if (kpi.status === 'warning') {
       return (
-        <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+        <span className="text-[9.5px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
           Warning
         </span>
       );
@@ -46,32 +46,34 @@ export const KPICard: React.FC<KPICardProps> = ({
 
   return (
     <div
-      className={`bg-[#0f172a]/95 border rounded-xl p-4.5 transition-all shadow-md flex flex-col justify-between ${getStatusBorder()}`}
+      className={`bg-[#0f172a]/95 border rounded-xl p-5 transition-all duration-200 shadow-md hover:shadow-lg flex flex-col justify-between min-h-[136px] ${getStatusBorder()}`}
     >
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+        <div className="flex items-center justify-between gap-1.5 mb-3">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">
             {title}
           </span>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             {getStatusBadge()}
-            <div className={`p-1.5 rounded-lg bg-slate-900 border border-slate-800 ${colorClass}`}>
+            <div className={`p-1.5 rounded-lg bg-slate-900/90 border border-slate-800 ${colorClass} flex items-center justify-center shrink-0 shadow-sm`}>
               <Icon className="w-4 h-4" />
             </div>
           </div>
         </div>
 
-        <div className="flex items-baseline gap-1 mt-1">
-          <span className="text-2xl font-bold font-mono tracking-tight text-slate-100">
+        <div className="flex items-baseline gap-1.5 mt-1">
+          <span className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-slate-100">
             {kpi.value.toFixed(1)}
           </span>
-          <span className="text-xs font-semibold text-slate-400">{kpi.unit}</span>
+          <span className="text-xs sm:text-sm font-semibold text-slate-400">{kpi.unit}</span>
         </div>
       </div>
 
       {kpi.subtext && (
-        <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-          <span>{kpi.subtext}</span>
+        <div className="mt-3.5 pt-2.5 border-t border-slate-800/70 flex items-center justify-between text-[10.5px] text-slate-400 font-mono tracking-tight overflow-hidden">
+          <span className="truncate" title={kpi.subtext}>
+            {kpi.subtext}
+          </span>
         </div>
       )}
     </div>

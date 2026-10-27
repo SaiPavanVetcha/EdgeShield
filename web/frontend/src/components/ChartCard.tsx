@@ -21,10 +21,11 @@ interface MetricLineConfig {
 interface ChartCardProps {
   title: string;
   subtitle?: string;
-  data: TimeseriesPoint[];
+  data: TimeseriesPoint[] | any[];
   lines: MetricLineConfig[];
   available: boolean;
   yDomain?: [number, number];
+  isHero?: boolean;
 }
 
 export const ChartCard: React.FC<ChartCardProps> = ({
@@ -34,6 +35,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
   lines,
   available,
   yDomain = [0, 100],
+  isHero = false,
 }) => {
   // CRITICAL REQUIREMENT: Hide chart if device has no telemetry data for this metric
   if (!available || !data || data.length === 0) {
@@ -99,10 +101,27 @@ export const ChartCard: React.FC<ChartCardProps> = ({
   };
 
   return (
-    <div className="bg-[#0f172a]/95 border border-slate-800/80 rounded-xl p-5 flex flex-col justify-between shadow-md">
-      <div className="flex items-center justify-between mb-4">
+    <div
+      className={`bg-[#0f172a]/95 border ${
+        isHero ? 'border-slate-800/90 shadow-lg' : 'border-slate-800/80 shadow-md'
+      } rounded-xl p-5 sm:p-6 flex flex-col justify-between transition-all hover:border-slate-700/80`}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-100 tracking-tight">{title}</h3>
+          <div className="flex items-center gap-2">
+            <h3
+              className={`${
+                isHero ? 'text-base sm:text-lg font-bold' : 'text-sm font-semibold'
+              } text-slate-100 tracking-tight`}
+            >
+              {title}
+            </h3>
+            {isHero && (
+              <span className="text-[10px] uppercase font-mono font-semibold tracking-wider px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                Primary
+              </span>
+            )}
+          </div>
           {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
         </div>
 
@@ -117,7 +136,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
         </div>
       </div>
 
-      <div className="h-64 w-full">
+      <div className={`${isHero ? 'h-80 sm:h-96' : 'h-64'} w-full`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
@@ -127,7 +146,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({
               tick={{ fill: '#64748b', fontSize: 11 }}
               tickLine={false}
               axisLine={{ stroke: '#1e293b' }}
-              minTickGap={30}
+              minTickGap={isHero ? 45 : 30}
             />
             <YAxis
               domain={yDomain}
@@ -143,9 +162,9 @@ export const ChartCard: React.FC<ChartCardProps> = ({
                 dataKey={l.key}
                 name={l.name}
                 stroke={l.color}
-                strokeWidth={2}
+                strokeWidth={isHero ? 2.5 : 2}
                 dot={false}
-                activeDot={{ r: 4, stroke: '#090d16', strokeWidth: 2 }}
+                activeDot={{ r: isHero ? 5 : 4, stroke: '#090d16', strokeWidth: 2 }}
                 isAnimationActive={false}
               />
             ))}

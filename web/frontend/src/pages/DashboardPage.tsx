@@ -6,7 +6,6 @@ import {
   BatteryCharging,
   Thermometer,
   Droplets,
-  AlertTriangle,
   Server,
 } from 'lucide-react';
 import { TopBar } from '../components/TopBar';
@@ -15,6 +14,21 @@ import { KPICard } from '../components/KPICard';
 import { ChartCard } from '../components/ChartCard';
 import { KPISkeleton, ChartSkeleton } from '../components/SkeletonLoader';
 import { useTelemetry } from '../hooks/useTelemetry';
+
+interface DashboardChartConfig {
+  id: string;
+  title: string;
+  subtitle: string;
+  data: any[];
+  available: boolean;
+  yDomain: [number, number];
+  lines: Array<{
+    key: string;
+    name: string;
+    color: string;
+    unit: string;
+  }>;
+}
 
 export const DashboardPage: React.FC = () => {
   const {
@@ -38,24 +52,30 @@ export const DashboardPage: React.FC = () => {
     handleWakeUpWarehouse,
   } = useTelemetry();
 
-  // Prepare chart datasets
+  // Prepare individual chart datasets
   const cpuData = useMemo(() => {
-    if (!cpuTs?.points) return [];
+    if (!cpuTs?.points || cpuTs.points.length === 0) return [];
     return cpuTs.points.map((p) => ({
       timestamp: p.timestamp,
       cpu: p.value,
     }));
   }, [cpuTs]);
 
-  const memoryStorageData = useMemo(() => {
+  const ramData = useMemo(() => {
     if (!ramTs?.points || ramTs.points.length === 0) return [];
-    const diskMap = new Map((diskTs?.points || []).map((p) => [p.timestamp, p.value]));
     return ramTs.points.map((p) => ({
       timestamp: p.timestamp,
       ram: p.value,
-      disk: diskMap.get(p.timestamp) ?? null,
     }));
-  }, [ramTs, diskTs]);
+  }, [ramTs]);
+
+  const diskData = useMemo(() => {
+    if (!diskTs?.points || diskTs.points.length === 0) return [];
+    return diskTs.points.map((p) => ({
+      timestamp: p.timestamp,
+      disk: p.value,
+    }));
+  }, [diskTs]);
 
   const envData = useMemo(() => {
     if (!envTs?.points || envTs.points.length === 0) return [];
@@ -75,6 +95,121 @@ export const DashboardPage: React.FC = () => {
     }));
   }, [batteryTs]);
 
+  // Defined in strict priority order for Hero Chart selection:
+  // 1. CPU Utilization (highest priority)
+  // 2. RAM Utilization
+  // 3. Disk Utilization
+  // 4. Ambient Environment (Temperature + Humidity)
+  // 5. Power & Battery
+  const allCharts: DashboardChartConfig[] = useMemo(
+    () => [
+      {
+        id: 'cpu',
+        title: 'CPU Utilization',
+        subtitle: 'Processing load percentage over time',
+        data: cpuData,
+        available: Boolean(cpuTs?.available && cpuData.length > 0),
+        yDomain: [0, 100],
+        lines: [
+          {
+            key: 'cpu',
+            name: 'CPU %',
+            color: '#38bdf8', // sky-400
+            unit: '%',
+          },
+        ],
+      },
+      {
+        id: 'ram',
+        title: 'RAM Utilization',
+        subtitle: 'System memory consumption over time',
+        data: ramData,
+        available: Boolean(ramTs?.available && ramData.length > 0),
+        yDomain: [0, 100],
+        lines: [
+          {
+            key: 'ram',
+            name: 'RAM %',
+            color: '#818cf8', // indigo-400
+            unit: '%',
+          },
+        ],
+      },
+      {
+        id: 'disk',
+        title: 'Disk Utilization',
+        subtitle: 'Storage capacity and partition usage',
+        data: diskData,
+        available: Boolean(diskTs?.available && diskData.length > 0),
+        yDomain: [0, 100],
+        lines: [
+          {
+            key: 'disk',
+            name: 'Disk %',
+            color: '#f59e0b', // amber-500
+            unit: '%',
+          },
+        ],
+      },
+      {
+        id: 'env',
+        title: 'Ambient Environment',
+        subtitle: 'ESP32 external sensor temperature and humidity',
+        data: envData,
+        available: Boolean(envTs?.available && envData.length > 0),
+        yDomain: [0, 100],
+        lines: [
+          {
+            key: 'temp',
+            name: 'Temp (°C)',
+            color: '#f43f5e', // rose-500
+            unit: '°C',
+          },
+          {
+            key: 'humidity',
+            name: 'Humidity (%)',
+            color: '#06b6d4', // cyan-500
+            unit: '%',
+          },
+        ],
+      },
+      {
+        id: 'battery',
+        title: 'Power & Battery',
+        subtitle: 'Current charge level and battery health capacity',
+        data: batteryData,
+        available: Boolean(batteryTs?.available && batteryData.length > 0),
+        yDomain: [0, 100],
+        lines: [
+          {
+            key: 'level',
+            name: 'Battery Level %',
+            color: '#c084fc', // purple-400
+            unit: '%',
+          },
+          {
+            key: 'health',
+            name: 'Health %',
+            color: '#10b981', // emerald-500
+            unit: '%',
+          },
+        ],
+      },
+    ],
+    [cpuData, cpuTs, ramData, ramTs, diskData, diskTs, envData, envTs, batteryData, batteryTs]
+  );
+
+  // Available charts that have actual data
+  const availableCharts = useMemo(
+    () => allCharts.filter((c) => c.available),
+    [allCharts]
+  );
+
+  // The highest priority available chart is the Hero Chart (full width, larger height)
+  // Remaining available charts go into the 2-column grid below
+  const heroChart = availableCharts[0] ?? null;
+  const secondaryCharts = availableCharts.slice(1);
+
   const hasAnyKpi =
     kpis &&
     (kpis.cpu?.available ||
@@ -83,6 +218,8 @@ export const DashboardPage: React.FC = () => {
       kpis.battery?.available ||
       kpis.temperature?.available ||
       kpis.humidity?.available);
+
+  const hasAnyChart = availableCharts.length > 0;
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-[#090d16] overflow-y-auto">
@@ -99,7 +236,7 @@ export const DashboardPage: React.FC = () => {
         isCached={isCached}
       />
 
-      <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
+      <div className="p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-8">
         {/* Databricks Free Tier Auto-Stop Alert / Wake Up Banner */}
         <WarehouseAlertBanner
           warehouseStatus={warehouseStatus}
@@ -108,14 +245,14 @@ export const DashboardPage: React.FC = () => {
         />
 
         {/* Section Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2 border-b border-slate-800/40">
           <div>
-            <h1 className="text-xl font-bold text-slate-100 tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-100 tracking-tight">
               {selectedDeviceId === 'all'
                 ? 'Fleet Telemetry Overview'
                 : `Device: ${devices.find((d) => d.device_id === selectedDeviceId)?.hostname || selectedDeviceId}`}
             </h1>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
               Live observability powered by Databricks Gold Layer (edgeshield_lakehouse.gold)
             </p>
           </div>
@@ -123,22 +260,25 @@ export const DashboardPage: React.FC = () => {
 
         {/* Loading Skeletons */}
         {isLoading && !kpis && (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="space-y-8">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-5">
               {[...Array(6)].map((_, i) => (
                 <KPISkeleton key={i} />
               ))}
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {[...Array(4)].map((_, i) => (
-                <ChartSkeleton key={i} />
-              ))}
+            <div className="space-y-6">
+              <ChartSkeleton isHero={true} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {[...Array(4)].map((_, i) => (
+                  <ChartSkeleton key={i} />
+                ))}
+              </div>
             </div>
-          </>
+          </div>
         )}
 
         {/* Empty State when no data is returned */}
-        {!isLoading && !hasAnyKpi && warehouseStatus === 'online' && (
+        {!isLoading && !hasAnyKpi && !hasAnyChart && warehouseStatus === 'online' && (
           <div className="bg-[#0f172a]/80 border border-slate-800 rounded-xl p-12 text-center">
             <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 mx-auto flex items-center justify-center text-slate-400 mb-3">
               <Server className="w-6 h-6" />
@@ -150,9 +290,9 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* KPI Cards Grid (Maximum 6, auto-hiding cards that have no data) */}
+        {/* KPI Cards Grid (All available cards, spacious gap-5 layout) */}
         {kpis && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-5">
             <KPICard
               title="CPU"
               kpi={kpis.cpu}
@@ -192,94 +332,49 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* Telemetry Charts (Maximum 4 charts, clean lines, auto-hiding if no data) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 1: CPU Utilization */}
-          <ChartCard
-            title="CPU Utilization"
-            subtitle="Processing load percentage over time"
-            data={cpuData}
-            available={Boolean(cpuTs?.available && cpuData.length > 0)}
-            yDomain={[0, 100]}
-            lines={[
-              {
-                key: 'cpu',
-                name: 'CPU %',
-                color: '#38bdf8', // sky-400
-                unit: '%',
-              },
-            ]}
-          />
+        {/* Telemetry Charts - Hierarchical Structure */}
+        {heroChart && (
+          <div className="space-y-6">
+            {/* 1. PRIMARY / HERO CHART (full width, larger height) */}
+            <ChartCard
+              key={heroChart.id}
+              title={heroChart.title}
+              subtitle={heroChart.subtitle}
+              data={heroChart.data}
+              available={heroChart.available}
+              yDomain={heroChart.yDomain}
+              lines={heroChart.lines}
+              isHero={true}
+            />
 
-          {/* Chart 2: RAM & Disk Utilization */}
-          <ChartCard
-            title="Memory & Storage"
-            subtitle="RAM and local mount point utilization"
-            data={memoryStorageData}
-            available={Boolean(ramTs?.available && memoryStorageData.length > 0)}
-            yDomain={[0, 100]}
-            lines={[
-              {
-                key: 'ram',
-                name: 'RAM %',
-                color: '#818cf8', // indigo-400
-                unit: '%',
-              },
-              {
-                key: 'disk',
-                name: 'Disk %',
-                color: '#f59e0b', // amber-500
-                unit: '%',
-              },
-            ]}
-          />
-
-          {/* Chart 3: Ambient Environment (Hidden if device has no env telemetry) */}
-          <ChartCard
-            title="Ambient Environment"
-            subtitle="ESP32 external sensor temperature and humidity"
-            data={envData}
-            available={Boolean(envTs?.available && envData.length > 0)}
-            yDomain={[0, 100]}
-            lines={[
-              {
-                key: 'temp',
-                name: 'Temp (°C)',
-                color: '#f43f5e', // rose-500
-                unit: '°C',
-              },
-              {
-                key: 'humidity',
-                name: 'Humidity (%)',
-                color: '#06b6d4', // cyan-500
-                unit: '%',
-              },
-            ]}
-          />
-
-          {/* Chart 4: Battery & Power (Hidden if device has no battery telemetry) */}
-          <ChartCard
-            title="Power & Battery"
-            subtitle="Current charge level and battery health capacity"
-            data={batteryData}
-            available={Boolean(batteryTs?.available && batteryData.length > 0)}
-            yDomain={[0, 100]}
-            lines={[
-              {
-                key: 'level',
-                name: 'Battery Level %',
-                color: '#c084fc', // purple-400
-                unit: '%',
-              },
-              {
-                key: 'health',
-                name: 'Health %',
-                color: '#10b981', // emerald-500
-                unit: '%',
-              },
-            ]}
-          />
-        </div>
+            {/* 2. SECONDARY CHARTS (2-column grid below hero) */}
+            {secondaryCharts.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {secondaryCharts.map((chart, index) => {
+                  const isLastOdd =
+                    secondaryCharts.length % 2 === 1 &&
+                    index === secondaryCharts.length - 1;
+                  return (
+                    <div
+                      key={chart.id}
+                      className={isLastOdd ? 'col-span-1 lg:col-span-2' : ''}
+                    >
+                      <ChartCard
+                        title={chart.title}
+                        subtitle={chart.subtitle}
+                        data={chart.data}
+                        available={chart.available}
+                        yDomain={chart.yDomain}
+                        lines={chart.lines}
+                        isHero={false}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
