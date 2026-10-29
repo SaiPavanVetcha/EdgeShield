@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>EdgeShield — Interactive Architecture Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══════ HEADER (sticky) ═══════ -->
+  <header id="header">
+    <div class="hdr-left">
+      <svg class="hdr-logo" viewBox="0 0 40 40" width="36" height="36">
+        <polygon points="20,2 36,11 36,29 20,38 4,29 4,11" fill="none" stroke="#00aaff" stroke-width="1.4"/>
+        <polygon points="20,8 30,13.5 30,26.5 20,32 10,26.5 10,13.5" fill="none" stroke="#00aaff" stroke-width="0.7" opacity="0.35"/>
+        <circle cx="20" cy="20" r="5" fill="#00aaff" opacity="0.85"/>
+      </svg>
+      <div>
+        <h1 class="hdr-title">EDGE<span>SHIELD</span></h1>
+        <p class="hdr-sub">Intelligent Edge-Based Predictive Infrastructure Monitoring &amp; Analytics</p>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="view-toggle">
+        <button class="vt active" id="btn-simple">Simple View</button>
+        <button class="vt" id="btn-technical">Technical View</button>
+      </div>
+      <div class="controls">
+        <button class="ctrl primary" id="btn-start">▶ Start Demo</button>
+        <button class="ctrl" id="btn-pause" disabled>⏸ Pause</button>
+        <button class="ctrl" id="btn-restart" disabled>↻ Restart</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════ MAIN ARCHITECTURE (scrollable) ═══════ -->
+  <main id="main">
+    <svg id="svg-canvas" class="svg-layer">
+      <defs>
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+    </svg>
+    <div id="packet-layer"></div>
+
+    <!-- ═══════════ DATA SOURCES ═══════════ -->
+
+    <!-- PCs — Upper Left -->
+    <div id="pc-group">
+      <div class="section-label">CLIENT COMPUTERS</div>
+      <div class="pc-cluster">
+        <div class="node pc-card" id="pc-1" data-component="pc-1">
+          <div class="pc-ico">💻</div>
+          <div class="pc-body">
+            <div class="pc-name">PC-01</div>
+            <div class="pc-os">Windows</div>
+            <div class="pc-stat"><span class="dot on"></span> Monitoring</div>
+          </div>
+        </div>
+        <div class="node pc-card" id="pc-2" data-component="pc-2">
+          <div class="pc-ico">💻</div>
+          <div class="pc-body">
+            <div class="pc-name">PC-02</div>
+            <div class="pc-os">Windows</div>
+            <div class="pc-stat"><span class="dot on"></span> Monitoring</div>
+          </div>
+        </div>
+        <div class="node pc-card" id="pc-3" data-component="pc-3">
+          <div class="pc-ico">💻</div>
+          <div class="pc-body">
+            <div class="pc-name">PC-03</div>
+            <div class="pc-os">Windows</div>
+            <div class="pc-stat"><span class="dot on"></span> Monitoring</div>
+          </div>
+        </div>
+        <div class="node pc-card" id="pc-4" data-component="pc-4">
+          <div class="pc-ico">💻</div>
+          <div class="pc-body">
+            <div class="pc-name">PC-04</div>
+            <div class="pc-os">Windows</div>
+            <div class="pc-stat"><span class="dot on"></span> Monitoring</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="lan-label" class="net-badge">LAN</div>
+
+    <!-- Environment — Upper Right -->
+    <div id="env-group">
+      <div class="section-label">ENVIRONMENT</div>
+      <div class="sensor-pair">
+        <div class="node sensor-card" id="temp-sensor" data-component="temp-sensor">
+          <div class="sensor-ico">🌡️</div>
+          <div class="sensor-body">
+            <div class="sensor-name">Temperature Sensor</div>
+            <div class="sensor-reading">27.4 °C</div>
+          </div>
+        </div>
+        <div class="node sensor-card" id="humidity-sensor" data-component="humidity-sensor">
+          <div class="sensor-ico">💧</div>
+          <div class="sensor-body">
+            <div class="sensor-name">DHT22 Humidity</div>
+            <div class="sensor-reading">61 %</div>
+          </div>
+        </div>
+      </div>
+      <div class="node esp-card" id="esp32" data-component="esp32">
+        <svg class="esp-chip" viewBox="0 0 48 30" width="52" height="32">
+          <rect x="6" y="2" width="36" height="26" rx="4" fill="none" stroke="#10b981" stroke-width="1.4"/>
+          <rect x="13" y="7" width="22" height="16" rx="3" fill="rgba(16,185,129,0.06)" stroke="#10b981" stroke-width="0.9"/>
+          <line x1="2" y1="9" x2="6" y2="9" stroke="#10b981" stroke-width="1.2"/>
+          <line x1="2" y1="15" x2="6" y2="15" stroke="#10b981" stroke-width="1.2"/>
+          <line x1="2" y1="21" x2="6" y2="21" stroke="#10b981" stroke-width="1.2"/>
+          <line x1="42" y1="9" x2="46" y2="9" stroke="#10b981" stroke-width="1.2"/>
+          <line x1="42" y1="15" x2="46" y2="15" stroke="#10b981" stroke-width="1.2"/>
+          <line x1="42" y1="21" x2="46" y2="21" stroke="#10b981" stroke-width="1.2"/>
+          <text x="24" y="18" text-anchor="middle" font-size="6" fill="#10b981" font-family="Inter" font-weight="600">MCU</text>
+        </svg>
+        <div class="esp-info">
+          <div class="esp-name">ESP32</div>
+          <div class="esp-sub">Environmental Node</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Server — Center -->
+    <div class="node server-card" id="server" data-component="server">
+      <svg class="srv-rack" viewBox="0 0 64 72" width="72" height="80">
+        <rect x="6" y="4" width="52" height="20" rx="4" fill="none" stroke="#5b8def" stroke-width="1.6"/>
+        <rect x="6" y="26" width="52" height="20" rx="4" fill="none" stroke="#5b8def" stroke-width="1.6"/>
+        <rect x="6" y="48" width="52" height="18" rx="4" fill="none" stroke="#5b8def" stroke-width="1.3" opacity="0.45"/>
+        <circle cx="14" cy="14" r="2.8" fill="#10b981"/><circle cx="14" cy="36" r="2.8" fill="#10b981"/>
+        <circle cx="14" cy="57" r="2" fill="#3b82f6" opacity="0.4"/>
+        <line x1="22" y1="14" x2="50" y2="14" stroke="#5b8def" stroke-width="1.4" opacity="0.2"/>
+        <line x1="22" y1="36" x2="50" y2="36" stroke="#5b8def" stroke-width="1.4" opacity="0.2"/>
+      </svg>
+      <div class="srv-title">SERVER</div>
+      <div class="srv-sub">Central Data Collection</div>
+      <div class="srv-dot" id="server-activity"></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         DATABRICKS (outer container)
+         ┌─────────────────────────────────┐
+         │ Databricks                      │
+         │  ┌──────────────────────────┐   │
+         │  │ EdgeShield Database      │   │
+         │  └──────────────────────────┘   │
+         │              ↓                  │
+         │  ┌──────────────────────────┐   │
+         │  │ Data Pipeline            │   │
+         │  │   Bronze → Silver → Gold │   │
+         │  └──────────────────────────┘   │
+         └─────────────────────────────────┘
+         ═══════════════════════════════════════════════ -->
+    <div id="platform">
+      <div class="plat-hdr">
+        <span class="plat-rule"></span>
+        <span class="plat-title">DATABRICKS</span>
+        <span class="plat-rule"></span>
+      </div>
+
+      <!-- EdgeShield Database (inside Databricks, at top) -->
+      <div class="node db-card" id="edgeshield-db" data-component="edgeshield-db">
+        <svg class="db-ico" viewBox="0 0 36 36" width="36" height="36">
+          <ellipse cx="18" cy="9" rx="13" ry="5" fill="none" stroke="#8b5cf6" stroke-width="1.4"/>
+          <path d="M5,9 v7 a13,5 0 0,0 26,0 v-7" fill="none" stroke="#8b5cf6" stroke-width="1.4"/>
+          <path d="M5,16 v7 a13,5 0 0,0 26,0 v-7" fill="none" stroke="#8b5cf6" stroke-width="1.2" opacity="0.5"/>
+          <path d="M5,23 v5 a13,5 0 0,0 26,0 v-5" fill="none" stroke="#8b5cf6" stroke-width="1" opacity="0.3"/>
+        </svg>
+        <div>
+          <div class="db-name">EdgeShield Database</div>
+          <div class="db-sub">Stores collected system and environmental telemetry</div>
+        </div>
+      </div>
+
+      <!-- Arrow: DB → Data Pipeline -->
+      <div class="pipe-arrow">▼</div>
+
+      <!-- ── DATA PIPELINE (inner box inside Databricks) ── -->
+      <div id="data-pipeline">
+        <div class="pipe-hdr">
+          <span class="pipe-rule"></span>
+          <span class="pipe-title">DATA PIPELINE</span>
+          <span class="pipe-rule"></span>
+        </div>
+
+        <!-- Bronze -->
+        <div class="node layer-card bronze-card" id="bronze" data-component="bronze">
+          <span class="layer-medal">🥉</span>
+          <div class="layer-body">
+            <div class="layer-name">BRONZE</div>
+            <div class="layer-desc">Raw Data — exactly as received, no changes</div>
+          </div>
+        </div>
+
+        <!-- Cleaning Zone -->
+        <div id="clean-zone" class="tz">
+          <div class="tz-label">🔧 Data Cleaning Process</div>
+          <div class="tz-content">
+            <div class="tz-panel">
+              <div class="tz-panel-title">BEFORE — Raw Record</div>
+              <div class="tz-code" id="tz-clean-before"></div>
+            </div>
+            <div class="tz-middle">
+              <div class="tz-steps-col" id="tz-clean-steps">
+                <div class="tz-step"><span class="tz-check">○</span> Remove duplicates</div>
+                <div class="tz-step"><span class="tz-check">○</span> Handle missing values</div>
+                <div class="tz-step"><span class="tz-check">○</span> Fix inconsistencies</div>
+              </div>
+              <div class="tz-arrow-big">⟶</div>
+            </div>
+            <div class="tz-panel">
+              <div class="tz-panel-title">AFTER — Clean Record</div>
+              <div class="tz-code" id="tz-clean-after"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="pipe-arrow">▼</div>
+
+        <!-- Silver -->
+        <div class="node layer-card silver-card" id="silver" data-component="silver">
+          <span class="layer-medal">🥈</span>
+          <div class="layer-body">
+            <div class="layer-name">SILVER</div>
+            <div class="layer-desc">Clean Data — duplicates removed, values corrected</div>
+          </div>
+        </div>
+
+        <!-- Normalization Zone -->
+        <div id="norm-zone" class="tz">
+          <div class="tz-label">⚙ Data Normalization Process</div>
+          <div class="tz-content">
+            <div class="tz-panel">
+              <div class="tz-panel-title">BEFORE — Clean Record</div>
+              <div class="tz-code" id="tz-norm-before"></div>
+            </div>
+            <div class="tz-middle">
+              <div class="tz-steps-col" id="tz-norm-steps">
+                <div class="tz-step"><span class="tz-check">○</span> Organize fields</div>
+                <div class="tz-step"><span class="tz-check">○</span> Normalize values</div>
+                <div class="tz-step"><span class="tz-check">○</span> Standardize format</div>
+              </div>
+              <div class="tz-arrow-big">⟶</div>
+            </div>
+            <div class="tz-panel">
+              <div class="tz-panel-title">AFTER — Analysis-Ready</div>
+              <div class="tz-code" id="tz-norm-after"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="pipe-arrow">▼</div>
+
+        <!-- Gold -->
+        <div class="node layer-card gold-card" id="gold" data-component="gold">
+          <span class="layer-medal">🥇</span>
+          <div class="layer-body">
+            <div class="layer-name">GOLD</div>
+            <div class="layer-desc">Analysis-Ready — normalized, structured for ML</div>
+          </div>
+        </div>
+
+      </div><!-- end #data-pipeline -->
+    </div><!-- end #platform (Databricks) -->
+
+    <!-- ═══════════ INTELLIGENCE ═══════════ -->
+
+    <!-- Analytics -->
+    <div class="node analytics-card" id="analytics" data-component="analytics">
+      <div class="anl-title">ANALYTICS &amp; MACHINE LEARNING</div>
+      <div class="anl-items">
+        <div class="anl-item"><span class="anl-dot"></span> Anomaly Detection</div>
+        <div class="anl-item"><span class="anl-dot"></span> Time-Series Analysis</div>
+        <div class="anl-item"><span class="anl-dot"></span> Health / Failure Risk Score</div>
+      </div>
+    </div>
+
+    <!-- Outputs -->
+    <div class="node out-card" id="dashboard-output" data-component="dashboard">
+      <div class="out-title">📊 Web Dashboard</div>
+      <div class="dash-mini">
+        <div class="dm-top"><span class="dm-pc" id="dm-name">PC-01</span><span class="dm-score good" id="dm-score">82</span></div>
+        <div class="dm-bars">
+          <div class="dm-bar"><span>CPU</span><div class="dm-track"><div class="dm-fill" id="dm-cpu" style="width:52%"></div></div><span id="dm-cpu-v">52%</span></div>
+          <div class="dm-bar"><span>RAM</span><div class="dm-track"><div class="dm-fill ram" id="dm-ram" style="width:61%"></div></div><span id="dm-ram-v">61%</span></div>
+          <div class="dm-bar"><span>Temp</span><div class="dm-track"><div class="dm-fill temp" id="dm-temp" style="width:54%"></div></div><span id="dm-temp-v">27°C</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="node out-card" id="chatbot-output" data-component="chatbot">
+      <div class="out-title">🤖 AI Assistant</div>
+      <div class="chat-mini">
+        <div class="cm-user">Why is PC-03 at high risk?</div>
+        <div class="cm-bot" id="cm-response">All systems operating normally. No immediate concerns.</div>
+      </div>
+    </div>
+
+    <div class="node out-card" id="alerts-output" data-component="alerts">
+      <div class="out-title">🔔 Alerts</div>
+      <div class="alert-mini" id="alert-mini"><span class="am-ico ok">✓</span> All systems normal</div>
+    </div>
+
+    <div class="node out-card" id="recommend-output" data-component="recommend">
+      <div class="out-title">💡 Recommendations</div>
+      <div class="rec-mini" id="rec-mini">
+        <div>• Monitor system health regularly</div>
+        <div>• Schedule routine maintenance</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ═══════ STEP BAR (fixed bottom) ═══════ -->
+  <div id="step-bar">
+    <div class="step-track">
+      <div class="step" data-step="collecting"><span class="step-dot"></span>Collecting</div>
+      <div class="step-sep"></div>
+      <div class="step" data-step="transmitting"><span class="step-dot"></span>Transmitting</div>
+      <div class="step-sep"></div>
+      <div class="step" data-step="storing"><span class="step-dot"></span>Storing</div>
+      <div class="step-sep"></div>
+      <div class="step" data-step="cleaning"><span class="step-dot"></span>Cleaning</div>
+      <div class="step-sep"></div>
+      <div class="step" data-step="preparing"><span class="step-dot"></span>Preparing</div>
+      <div class="step-sep"></div>
+      <div class="step" data-step="analyzing"><span class="step-dot"></span>Analyzing</div>
+      <div class="step-sep"></div>
+      <div class="step" data-step="predicting"><span class="step-dot"></span>Predicting</div>
+      <div class="step-sep"></div>
+      <div class="step" data-step="recommending"><span class="step-dot"></span>Recommending</div>
+    </div>
+  </div>
+
+  <div id="tooltip" class="tooltip"></div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
