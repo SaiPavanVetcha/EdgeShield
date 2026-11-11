@@ -1,195 +1,100 @@
-# EdgeShield Telemetry & Monitoring Dashboard
+# EdgeShield Web Monitoring & Analytics Dashboard
 
-A clean, production-grade edge telemetry monitoring dashboard and API built from scratch for the EdgeShield project. The system reads directly from the Databricks Lakehouse Gold Layer (`edgeshield_lakehouse.gold`) and delivers real-time observability across edge devices and microcontrollers.
+> **Full-stack telemetry observability dashboard and REST API for EdgeShield.**  
+> For the complete system architecture, data pipeline, and hardware clients, see the [Root README](../README.md).
 
----
-
-## Architecture Overview
-
-```
-                      ┌──────────────────────────────────────────────┐
-                      │          Databricks Lakehouse                │
-                      │         (Catalog: edgeshield_lakehouse)      │
-                      │               Schema: gold                   │
-                      │ ──────────────────────────────────────────── │
-                      │ • dim_device                                 │
-                      │ • fact_cpu_telemetry                         │
-                      │ • fact_ram_telemetry                         │
-                      │ • fact_disk_telemetry                        │
-                      │ • fact_battery_telemetry                     │
-                      │ • fact_environment_telemetry                 │
-                      └──────────────────────┬───────────────────────┘
-                                             │ SQL over HTTP
-                                             ▼
-                      ┌──────────────────────────────────────────────┐
-                      │              EdgeShield Backend              │
-                      │            (Python 3.11+ / FastAPI)          │
-                      │ ──────────────────────────────────────────── │
-                      │ • In-Memory Fallback Cache (3-minute TTL)    │
-                      │ • Free Tier Auto-Stop Resiliency Engine      │
-                      │ • Rule-Based Alert Heuristics                │
-                      │ • REST Endpoints (/api/*)                    │
-                      └──────────────────────┬───────────────────────┘
-                                             │ JSON API (Port 8000)
-                                             ▼
-                      ┌──────────────────────────────────────────────┐
-                      │             EdgeShield Frontend              │
-                      │           (React 18 + Vite + TS)             │
-                      │ ──────────────────────────────────────────── │
-                      │ • Dark Minimalist Theme (Tailwind CSS)       │
-                      │ • Responsive Telemetry Charts (Recharts)     │
-                      │ • Sleeping Warehouse Detection & Wake-Up UI  │
-                      │ • Dynamic Scope: Fleet vs. Individual Device │
-                      └──────────────────────────────────────────────┘
-```
+This directory contains the full-stack web application for EdgeShield, providing real-time and historical monitoring across connected PCs, embedded nodes, and ESP32 microcontrollers. The system reads directly from the Databricks Lakehouse Gold Layer (`edgeshield_lakehouse.gold`) and delivers interactive visual telemetry.
 
 ---
 
-## Directory Structure
+## Directory Overview
 
-```
-web/
-├── backend/
-│   ├── app/
-│   │   ├── main.py                     # FastAPI application & router mounting
-│   │   ├── config.py                   # Pydantic configuration & env parsing
-│   │   ├── database.py                 # Databricks SQL connection & auto-stop manager
-│   │   ├── models.py                   # Pydantic data contracts & schemas
-│   │   ├── routers/
-│   │   │   ├── devices.py              # GET /api/devices
-│   │   │   ├── kpis.py                 # GET /api/kpis
-│   │   │   ├── timeseries.py           # GET /api/timeseries
-│   │   │   ├── alerts.py               # GET/POST /api/alerts
-│   │   │   └── health.py               # GET /api/health & POST /api/health/wake-up
-│   │   └── services/
-│   │       ├── databricks_service.py   # Gold layer SQL query execution
-│   │       └── alert_engine.py         # Heuristic rules evaluation
-│   ├── requirements.txt                # Python backend dependencies
-│   ├── .env.example                    # Template for Databricks credentials
-│   └── README.md
-├── frontend/
-│   ├── src/
-│   │   ├── components/                 # Sidebar, TopBar, KPICard, ChartCard, etc.
-│   │   ├── pages/                      # Dashboard, Devices, Alerts, Settings
-│   │   ├── hooks/                      # useTelemetry state management hook
-│   │   ├── services/                   # Typed API client
-│   │   ├── types/                      # TypeScript domain definitions
-│   │   ├── App.tsx                     # Top-level routing and layout
-│   │   ├── main.tsx                    # React application entrypoint
-│   │   └── index.css                   # Tailwind directives and custom scrollbars
-│   ├── package.json
-│   ├── vite.config.ts                  # Vite config with backend proxy
-│   ├── tailwind.config.js              # Dark theme styling tokens
-│   └── index.html
-└── README.md
-```
+* **[`backend/`](backend/)**: FastAPI analytical service that queries Databricks SQL, enforces in-memory fallback caching, handles SQL warehouse auto-stop/wake-up cycles, and evaluates alert heuristics.
+* **[`frontend/`](frontend/)**: React 18 + Vite + TypeScript + Tailwind CSS dashboard with responsive Recharts time-series visualizations and fleet-wide vs. per-device drilldown.
 
 ---
 
 ## Quickstart Guide
 
-### 1. Backend Setup
+### 1. Run the Backend API
+```bash
+# Navigate to backend
+cd backend
 
-1. Open a terminal in `web/backend`:
-   ```bash
-   cd web/backend
-   ```
+# Create .env from template
+cp .env.example .env
 
-2. Create your `.env` configuration file from the template:
-   ```bash
-   cp .env.example .env
-   ```
+# Configure your Databricks workspace credentials in .env:
+# DATABRICKS_HOST, DATABRICKS_HTTP_PATH, DATABRICKS_TOKEN
+# DATABRICKS_CATALOG=edgeshield_lakehouse, DATABRICKS_SCHEMA=gold
 
-3. Populate `.env` with your Databricks workspace credentials:
-   ```ini
-   DATABRICKS_HOST=dbc-xxxxxxxx-xxxx.cloud.databricks.com
-   DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/xxxxxxxxxxxxxxxx
-   DATABRICKS_TOKEN=dapi_your_databricks_access_token_here
-   DATABRICKS_CATALOG=edgeshield_lakehouse
-   DATABRICKS_SCHEMA=gold
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-4. Install requirements:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-5. Launch the backend server:
-   ```bash
-   uvicorn app.main:app --reload --port 8000
-   ```
-   API docs will be available at [http://localhost:8000/docs](http://localhost:8000/docs).
+# Start backend server on port 8000
+uvicorn app.main:app --reload --port 8000
+```
+Interactive Swagger API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ---
 
-### 2. Frontend Setup
+### 2. Run the Frontend UI
+```bash
+# Open a new terminal and navigate to frontend
+cd frontend
 
-1. Open a second terminal in `web/frontend`:
-   ```bash
-   cd web/frontend
-   ```
+# Install Node dependencies (Node.js 18+)
+npm install
 
-2. Install dependencies (Node 18+):
-   ```bash
-   npm install
-   ```
-
-3. Launch development server:
-   ```bash
-   npm run dev
-   ```
-   The application will run at [http://localhost:5173](http://localhost:5173).
+# Start development server on port 5173
+npm run dev
+```
+Open [http://localhost:5173](http://localhost:5173). The Vite dev server automatically proxies `/api` calls to `http://localhost:8000`.
 
 ---
 
-## How Databricks Free Tier Auto-Stop Works
+## Configuration & Environment Variables
 
-Databricks Free Tier and Serverless SQL Warehouses automatically power down after 10–15 minutes of inactivity to save compute credits.
+The frontend works out of the box with default Vite proxying. The backend requires Databricks credentials in `web/backend/.env`:
 
-### The Problem
-When a user visits a traditional dashboard while the warehouse is stopped:
-- Initial queries either hang for 30–60 seconds while compute boots up, or fail with a 503/timeout exception.
-- Raw error screens or blank cards degrade user experience.
-
-### The EdgeShield Solution
-1. **Intelligent State Classification:** The backend inspects connector exceptions (`database.py`) and categorizes warehouse status into:
-   - `online`: Responsive within normal latency.
-   - `starting`: Compute node spin-up sequence in progress.
-   - `stopped`: Warehouse sleeping due to inactivity.
-   - `unconfigured`: Missing connection credentials.
-2. **Resilient Fallback Cache:** Every successful query is cached in-memory for 3 minutes. If the warehouse auto-stops or times out, the backend serves the last known good data with an `is_cached: true` indicator instead of crashing.
-3. **One-Click Wake-Up Button:**
-   - If the warehouse is sleeping, a prominent amber notification banner appears with a **"Wake Up Warehouse"** button.
-   - Clicking this button invokes `POST /api/health/wake-up`, which dispatches a lightweight asynchronous `SELECT 1` ping.
-   - The frontend transitions to a polite polling state ("Starting Databricks SQL Warehouse... typically completes in 15–45s") and automatically refreshes all charts the moment the warehouse comes online.
+| Variable | Required | Default | Description |
+| :--- | :---: | :--- | :--- |
+| `DATABRICKS_HOST` | **Yes** | — | Databricks workspace hostname (`dbc-xxxx.cloud.databricks.com`) |
+| `DATABRICKS_HTTP_PATH` | **Yes** | — | SQL Warehouse HTTP path (`/sql/1.0/warehouses/xxxx`) |
+| `DATABRICKS_TOKEN` | **Yes** | — | Databricks Personal Access Token (`dapi...`) |
+| `DATABRICKS_CATALOG` | No | `edgeshield_lakehouse` | Unity Catalog catalog name |
+| `DATABRICKS_SCHEMA` | No | `gold` | Target schema containing Gold layer Delta tables |
+| `PORT` | No | `8000` | FastAPI server port |
+| `CACHE_TTL_SECONDS` | No | `180` | In-memory fallback query cache duration (seconds) |
+| `QUERY_TIMEOUT_SECONDS` | No | `45` | Databricks SQL query execution timeout |
+| `CORS_ORIGINS` | No | `http://localhost:5173,...` | Allowed CORS origins for browser access |
 
 ---
 
-## Gold Layer Schema Reference
+## Key Architectural Highlights
 
-All queries strictly target the Gold Layer Delta tables in catalog `edgeshield_lakehouse`, schema `gold`:
+### Databricks Free Tier Auto-Stop Resiliency
+Databricks Free Tier and Serverless SQL Warehouses automatically power down after 10–15 minutes of idle time to conserve compute credits. EdgeShield handles this seamlessly:
+1. **State Classification:** Connector exceptions are classified in real time as `online`, `starting`, `stopped`, or `unconfigured`.
+2. **In-Memory Fallback Cache:** Successful queries are cached in memory for 3 minutes (`CACHE_TTL_SECONDS`). If the warehouse is sleeping or times out, the backend serves the last known good telemetry with an `is_cached: true` flag to prevent UI errors.
+3. **One-Click Wake-Up Button:** If the warehouse is sleeping, an amber banner appears in the dashboard with a **"Wake Up Warehouse"** button. Clicking it triggers `POST /api/health/wake-up`, which dispatches an asynchronous ping (`SELECT 1`) to initiate compute spin-up while the frontend automatically polls until online.
 
-| Table | Granularity | Key Telemetry Columns |
-| :--- | :--- | :--- |
-| `dim_device` | Device dimension | `device_key`, `device_id`, `hostname`, `platform`, `logical_cores`, `physical_cores` |
-| `fact_cpu_telemetry` | CPU load events | `cpu_utilization_pct`, `cpu_freq_current_mhz`, `cpu_freq_max_mhz` |
-| `fact_ram_telemetry` | Memory load events | `ram_utilization_pct`, `ram_used_bytes`, `ram_available_bytes`, `ram_available_mb` |
-| `fact_disk_telemetry` | Storage events | `mount_point`, `disk_utilization_pct`, `disk_used_bytes`, `disk_free_gb` |
-| `fact_battery_telemetry` | Power telemetry | `battery_pct`, `battery_health_pct`, `design_capacity_raw`, `full_charge_capacity_raw` |
-| `fact_environment_telemetry`| ESP32 / sensor events| `temperature_c`, `humidity_percent` |
+### Gold Layer Star Schema Queried
+All analytical queries target the Gold layer star schema in `edgeshield_lakehouse.gold`:
+* `dim_device`: Device dimension (`device_key`, `device_id`, `hostname`, `platform`, `logical_cores`, `physical_cores`).
+* `fact_cpu_telemetry`: CPU utilization and core frequencies.
+* `fact_ram_telemetry`: RAM utilization, used, and available capacity.
+* `fact_disk_telemetry`: Mount-point storage utilization and free gigabytes.
+* `fact_battery_telemetry`: Battery percentage, power plugged state, and battery health degradation percentage.
+* `fact_environment_telemetry`: ESP32 ambient temperature (°C) and relative humidity (%).
 
-> **Note on Timestamp Alignment:** PC telemetry clients and ESP32 microcontrollers transmit metrics on independent intervals. Queries never perform strict timestamp equality joins between fact tables; each metric series is queried and downsampled independently.
+### Heuristic Alert Thresholds
+The backend dynamically evaluates heuristic rules against recent telemetry:
+* **Device Offline:** No telemetry recorded across fact tables for > 3 minutes.
+* **CPU Utilization:** Sustained load > 85% in recent telemetry window.
+* **RAM Utilization:** Memory usage > 90%.
+* **Disk Space:** Storage utilization > 90%.
+* **Ambient Temperature:** ESP32 sensor detecting > 35°C.
+* **Battery & Health:** Battery charge < 20% or battery health < 60%.
 
----
-
-## Rules-Based Alerts (V1)
-
-Alerts are dynamically evaluated by `AlertEngine` against active telemetry:
-- **Device Offline:** No events recorded across any fact table for > 3 minutes.
-- **CPU Utilization:** Sustained load > 85% across recent telemetry window.
-- **RAM Utilization:** Memory usage > 90%.
-- **Disk Space:** Utilization > 90%.
-- **Ambient Temperature:** ESP32 sensor detecting > 35°C.
-- **Battery & Health:** Battery charge < 20% or battery health < 60%.
-
-Alerts can be acknowledged directly from the Alerts page via `POST /api/alerts/{id}/acknowledge`.
+Alerts can be reviewed and acknowledged directly in the dashboard UI (`POST /api/alerts/{id}/acknowledge`).

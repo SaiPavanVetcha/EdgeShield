@@ -1,44 +1,50 @@
-# EdgeShield — Project Presentation Website
+# EdgeShield Presentation Website
 
-A clean, modern, modular presentation website showcasing the complete **EdgeShield** edge-to-lakehouse telemetry platform.
+> **Interactive 7-slide presentation application showcasing EdgeShield.**  
+> For the documentation directory, see the [Doc README](../README.md). For overall system architecture, see the [Root README](../../README.md).
 
-Built with **Vite + React + TypeScript + Tailwind CSS**.
-
----
-
-## ⚡ Interactive Workflow Assets
-
-Place your interactive workflow files in `public/workflow/`:
-- `index.html` (Primary interactive workflow demo)
-- `script.js`
-- `style.css`
-
-Slide 4 ("Complete Workflow") directly embeds `public/workflow/index.html` inside a clean, responsive, full-size viewport iframe with live controls.
+This folder contains a modular, responsive presentation website for presenting the EdgeShield edge-to-lakehouse platform to stakeholders, grant reviewers, and technical audiences. It is built with **React, TypeScript, Vite, and Tailwind CSS**.
 
 ---
 
-## 🚀 Running the Presentation Locally
+## Development & Usage
 
-From the `presentation/` directory:
+1. **Install dependencies (Node.js 18+):**
+   ```bash
+   npm install
+   ```
 
-```bash
-# 1. Install dependencies
-npm install
+2. **Start the local presentation server:**
+   ```bash
+   npm run dev
+   ```
+   Open your browser to the local server URL (e.g., [http://localhost:5173](http://localhost:5173)).
 
-# 2. Start the local presentation server
-npm run dev
-```
+3. **Build for static hosting:**
+   ```bash
+   npm run build
+   ```
+   Outputs production assets to `dist/`.
 
-Open your browser to the local URL (e.g. `http://localhost:5173`).
+4. **Linting:**
+   ```bash
+   npm run lint
+   ```
 
 ---
 
-## ⌨️ Presentation Keyboard Controls
+## Configuration
+
+This application runs entirely client-side. No API keys, database credentials, or environment variables are required.
+
+---
+
+## Presentation Keyboard Controls
 
 | Key | Action |
 | :--- | :--- |
-| **`→`** or **`Space`** or **`PageDown`** | Advance to Next Slide |
-| **`←`** or **`Backspace`** or **`PageUp`** | Return to Previous Slide |
+| **`→`** / **`Space`** / **`PageDown`** | Advance to Next Slide |
+| **`←`** / **`Backspace`** / **`PageUp`** | Return to Previous Slide |
 | **`1`** – **`7`** | Jump directly to Slide 1 through 7 |
 | **`F`** | Toggle Fullscreen Mode |
 | **`?`** | Open / Close Keyboard Shortcuts Guide |
@@ -46,47 +52,18 @@ Open your browser to the local URL (e.g. `http://localhost:5173`).
 
 ---
 
-## 📊 Presentation Structure (7 Slides)
+## Slide Outline
 
-1. **Title / Hero** — EdgeShield: *Edge Devices → Lakehouse → Intelligent Monitoring*
-2. **The Problem** — Server-centric tools fail on edge, unstructured telemetry, no clean path to decisions
-3. **Solution Overview** — Dual edge clients, full Databricks medallion architecture, Gold layer, progressive intelligence
-4. **Complete Workflow** — Interactive embedded architecture demo (`public/workflow/index.html`) showcasing the end-to-end telemetry pipeline
-5. **Gold Layer & Why It Matters** — Star schema (`dim_device` + 5 `fact_*` tables), independent timestamps, and ML readiness
-6. **Version Roadmap** — V1 (KPI dashboard & rules), V2 (ML anomaly detection), V3 (Natural language queries)
-7. **Summary & Closing** — EdgeShield recap, key architectural pillars, and thank you
+1. **Title / Hero:** EdgeShield overview (*Edge Devices → Lakehouse → Intelligent Monitoring*).
+2. **The Problem:** Edge observability bottlenecks, resource constraints, and fragmented telemetry.
+3. **Solution Overview:** Dual edge collection, asynchronous ingestion, Medallion lakehouse architecture, and real-time dashboard.
+4. **Complete Workflow:** Live embedded interactive architecture workflow demo (`public/workflow/index.html`).
+5. **Gold Layer & Why It Matters:** Star schema design (`dim_device` + 5 `fact_*` tables), independent sampling timestamps, and analytical queries.
+6. **Version Roadmap:** V1 (KPI dashboard & rules), V1.1 (security & spooling), V2 (ML anomaly detection and forecasting).
+7. **Summary & Closing:** EdgeShield summary and architectural takeaways.
 
 ---
 
-## 📁 Modular Directory Structure
+## Interactive Workflow Demo
 
-```
-presentation/
-├── public/
-│   ├── favicon.svg
-│   └── workflow/                  ← Interactive workflow files
-│       ├── index.html
-│       ├── script.js
-│       ├── style.css
-│       └── README.md
-├── src/
-│   ├── components/
-│   │   ├── Header.tsx             # Ambient header & progress indicator
-│   │   ├── Navigation.tsx         # Bottom progress dots & slide counter
-│   │   ├── LightboxModal.tsx      # Fullscreen diagram zoom
-│   │   └── KeyboardModal.tsx      # Keyboard shortcut guide
-│   ├── slides/
-│   │   ├── Slide1Hero.tsx         # Slide 1: Hero & Architecture Highlights
-│   │   ├── Slide2Problem.tsx      # Slide 2: Core Telemetry Challenges
-│   │   ├── Slide3Solution.tsx     # Slide 3: 4 Solution Pillars
-│   │   ├── Slide4Workflow.tsx     # Slide 4: Interactive Workflow Iframe
-│   │   ├── Slide5GoldLayer.tsx    # Slide 5: Star Schema & Fact Tables
-│   │   ├── Slide6Roadmap.tsx      # Slide 6: V1 → V2 → V3 Roadmap
-│   │   └── Slide7Closing.tsx      # Slide 7: Closing & Takeaways
-│   ├── App.tsx                    # State machine & keyboard orchestration
-│   ├── index.css                  # Design system, glassmorphism, animations
-│   ├── main.tsx                   # React root entrypoint
-│   └── types.ts                   # Slide and asset type definitions
-├── package.json
-└── tailwind.config.js
-```
+Slide 4 dynamically embeds the interactive simulation in [`public/workflow/index.html`](public/workflow/index.html) within a responsive iframe, demonstrating live event propagation from edge devices through the ingestion tier and Databricks lakehouse layers into the dashboard.
