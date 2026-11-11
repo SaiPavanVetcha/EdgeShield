@@ -98,13 +98,15 @@ EdgeShield/
 │   ├── collectors/              # Individual collectors (battery, cpu, disk, ram, system)
 │   ├── client.py                # Main collection loop and HTTP transmission agent
 │   ├── config.py                # Client configuration and environment loader
-│   └── .env.example             # Client environment template
+│   ├── .env.example             # Client environment template
+│   └── README.md                # Client agent guide
 ├── server/                      # Central ingestion server (FastAPI)
 │   ├── routes/                  # Ingestion endpoints (POST /metrics)
 │   ├── server.py                # Server entrypoint and lifespan management
 │   ├── database.py              # In-memory batch queue and Databricks writer
 │   ├── config.py                # Server settings & connection credentials
-│   └── .env.example             # Server environment template
+│   ├── .env.example             # Server environment template
+│   └── README.md                # Ingestion server guide
 ├── firmware/                    # Microcontroller firmware (C++ / Arduino)
 │   └── esp32_dht11.ino          # ESP32 firmware for DHT11 environmental sensing
 ├── edgeshield_etl_pipeline/     # Databricks Lakehouse transformations
@@ -123,6 +125,7 @@ EdgeShield/
 │   ├── EdgeShield_Project_Report.pdf # Formal engineering report
 │   └── README.md                # Documentation guide
 ├── requirements.txt             # Root Python dependencies (client, server, ETL tests)
+├── LICENSE                      # MIT License
 └── README.md                    # Root project documentation (this file)
 ```
 
@@ -276,5 +279,5 @@ Open your browser to [http://localhost:5173](http://localhost:5173). The Vite de
 
 ## License
 
-This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
+This project is licensed under the [MIT License](LICENSE).
 
