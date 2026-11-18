@@ -15,7 +15,28 @@ The PC Client Agent runs on host workstations, laptops, or embedded Linux comput
 
 ---
 
-## Setup & Execution
+## Quick Install (Recommended)
+
+Run the interactive guided setup wizard. The script prompts for your Central Server IP, port, device ID, and optional room tag, generates `client/.env` automatically, and optionally registers the client to start automatically on system boot:
+
+* **Linux / macOS:**
+  ```bash
+  cd client
+  bash install/setup.sh
+  ```
+
+* **Windows (PowerShell):**
+  ```powershell
+  cd client
+  powershell -ExecutionPolicy Bypass -File install\setup.ps1
+  ```
+
+> [!NOTE]
+> *Server Deployment Note:* While client setup is automated via the guided wizards above, the Central Ingestion Server deployment remains manual and requires active Databricks SQL credentials (see [`server/README.md`](../server/README.md)).
+
+---
+
+## Advanced / Manual Setup & Execution
 
 1. **Install dependencies:**
    From the repository root (or inside your virtual environment):
@@ -23,7 +44,7 @@ The PC Client Agent runs on host workstations, laptops, or embedded Linux comput
    pip install -r ../requirements.txt
    ```
 
-2. **Configure environment variables:**
+2. **Configure environment variables manually:**
    Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
