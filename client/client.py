@@ -1,3 +1,6 @@
+import logging
+from logging.handlers import RotatingFileHandler
+import os
 import socket
 import time
 from datetime import datetime, timezone
@@ -8,6 +11,8 @@ from config import (
     DEVICE_ID,
     FLUSH_INTERVAL_SECONDS,
     FLUSH_MAX_RECORDS,
+    LOG_DIR,
+    LOG_FILE,
     ROOM,
     SAMPLING_INTERVAL,
     SERVER_URL,
@@ -21,6 +26,40 @@ from collectors import (
     collect_system_info,
 )
 from spool import count, delete_ids, enqueue, fetch_batch
+
+# Configure dual logging: console + rotating log file
+logger = logging.getLogger("edgeshield_client")
+
+
+def setup_logging() -> logging.Logger:
+    """Configures console and rotating file logging for the client agent."""
+    os.makedirs(LOG_DIR, exist_ok=True)
+    logger.setLevel(logging.INFO)
+
+    if not logger.handlers:
+        formatter = logging.Formatter("%(message)s")
+
+        # Console Stream Handler
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+
+        # Rotating File Handler (max 5 MB per file, up to 3 backups)
+        file_handler = RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=5 * 1024 * 1024,
+            backupCount=3,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
+    return logger
+
+
+def log(message: str) -> None:
+    """Logs message to both console and client log file."""
+    logger.info(message)
 
 
 def build_telemetry_payload() -> dict:
@@ -51,13 +90,13 @@ def send_payload(payload: dict) -> bool:
         response.raise_for_status()
         return True
     except requests.exceptions.Timeout:
-        print(f"[!] Timeout: Server unreachable at {SERVER_URL}")
+        log(f"[!] Timeout: Server unreachable at {SERVER_URL}")
         return False
     except requests.exceptions.ConnectionError:
-        print(f"[!] Connection Refused: Server offline at {SERVER_URL}")
+        log(f"[!] Connection Refused: Server offline at {SERVER_URL}")
         return False
     except requests.exceptions.RequestException as err:
-        print(f"[!] Transmission Error: {err}")
+        log(f"[!] Transmission Error: {err}")
         return False
 
 
@@ -92,25 +131,28 @@ def flush_spool() -> Tuple[int, int]:
     remaining = count()
     timestamp = datetime.now(timezone.utc).isoformat()
     if total_sent > 0 or total_failed > 0:
-        print(f"[{timestamp}] Spool flush: {total_sent} sent, {total_failed} failed (pending: {remaining})")
+        log(f"[{timestamp}] Spool flush: {total_sent} sent, {total_failed} failed (pending: {remaining})")
 
     return total_sent, total_failed
 
 
 def main():
-    print("[*] Modular EdgeShield Client Agent Initialized (Durable Spool Mode)")
-    print(f"[*] Target Endpoint       : {SERVER_URL}")
-    print(f"[*] Device Identity       : {DEVICE_ID}")
-    print(f"[*] Room / Location       : {ROOM if ROOM else '(unassigned)'}")
-    print(f"[*] Sampling Cadence      : Every {SAMPLING_INTERVAL}s")
-    print(f"[*] Flush Cadence         : Every {FLUSH_INTERVAL_SECONDS}s (or at {FLUSH_MAX_RECORDS} pending records)")
-    print(f"[*] Spool Max Retention   : {SPOOL_MAX_RECORDS} records\n")
+    setup_logging()
+
+    log("[*] Modular EdgeShield Client Agent Initialized (Durable Spool Mode)")
+    log(f"[*] Target Endpoint       : {SERVER_URL}")
+    log(f"[*] Device Identity       : {DEVICE_ID}")
+    log(f"[*] Room / Location       : {ROOM if ROOM else '(unassigned)'}")
+    log(f"[*] Sampling Cadence      : Every {SAMPLING_INTERVAL}s")
+    log(f"[*] Flush Cadence         : Every {FLUSH_INTERVAL_SECONDS}s (or at {FLUSH_MAX_RECORDS} pending records)")
+    log(f"[*] Spool Max Retention   : {SPOOL_MAX_RECORDS} records")
+    log(f"[*] Log Output File       : {os.path.abspath(LOG_FILE)}\n")
 
     # Initial flush attempt on startup if pending records exist from prior runs
     initial_pending = count()
     last_flush_failed = False
     if initial_pending > 0:
-        print(f"[*] Found {initial_pending} pending record(s) in local spool. Attempting initial flush...")
+        log(f"[*] Found {initial_pending} pending record(s) in local spool. Attempting initial flush...")
         sent, failed = flush_spool()
         last_flush_failed = (failed > 0)
 
@@ -126,7 +168,7 @@ def main():
             payload = build_telemetry_payload()
             enqueue(payload)
             pending = count()
-            print(f"[{payload['timestamp']}] Telemetry collected (pending: {pending})")
+            log(f"[{payload['timestamp']}] Telemetry collected (pending: {pending})")
 
         # 2. Flush cycle: flush spool if interval elapsed or pending threshold reached
         pending = count()
@@ -151,4 +193,4 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n[*] EdgeShield Client Agent stopped by user.")
+        log("\n[*] EdgeShield Client Agent stopped by user.")

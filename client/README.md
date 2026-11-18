@@ -80,6 +80,8 @@ The agent implements a local-first offline spool architecture:
 | `FLUSH_MAX_RECORDS` | No | `20` | Batch size threshold that triggers an immediate flush |
 | `SPOOL_MAX_RECORDS` | No | `5000` | Maximum durable spool capacity before trimming oldest records |
 | `SPOOL_DIR` | No | `./spool` | Directory path where `telemetry_spool.db` is stored |
+| `LOG_DIR` | No | `./logs` | Directory path where client logs are stored |
+| `LOG_FILE` | No | `./logs/client.log` | Target file for rotating agent logs |
 
 ### Setting Room / Location per Machine
 
@@ -97,6 +99,96 @@ The telemetry agent features cross-platform battery detection with safe handling
 
 * **Laptops & Battery Nodes:** Gathers charge percentage, power plug state, and calculates battery health percentage by comparing `full_charge_capacity_raw` against `design_capacity_raw` (via `psutil` or Linux `/sys/class/power_supply/BAT*` sysfs nodes).
 * **Desktops & Headless Servers:** When no battery is detected, the agent safely returns `"present": false` with normalized `null` metrics. This ensures the Databricks Silver layer never encounters schema mismatches or pipeline crashes when ingesting stationary systems.
+
+---
+
+## File Logging & Observability
+
+The client agent records operational output simultaneously to stdout/console and a rotating file at `logs/client.log` (5 MB maximum per file, retaining up to 3 archive backups):
+* **Startup Banner:** Full configuration summary (target URL, device identity, room, cadence, spool cap, and log file path).
+* **Collection Telemetry:** Timestamps, sample counts, and pending spool size.
+* **Flush Results:** Counts of records sent and failed per cycle.
+* **Error Traces:** Network timeouts, connection refused alerts, and spool trimming warnings.
+
+To tail logs in real time:
+```bash
+# Linux / macOS
+tail -f logs/client.log
+
+# Windows PowerShell
+Get-Content -Wait -Tail 30 .\logs\client.log
+```
+
+---
+
+## Auto-Start on Boot (Linux & Windows)
+
+Automated scripts in [`client/install/`](install/) configure the client to run persistently in the background across system reboots.
+
+> [!IMPORTANT]
+> **Configuration Prerequisite:** Before enabling auto-start, verify that `client/.env` exists and contains your target `SERVER_IP`, `DEVICE_ID`, and optional `ROOM` tag.
+
+### 1. Linux (systemd)
+
+The installer detects your virtual environment (or system Python 3) and creates a systemd service unit.
+
+* **User Service (Recommended — No Root Required):**
+  Runs under the current user account and enables systemd lingering so it starts on boot without an interactive GUI session:
+  ```bash
+  cd client/install
+  chmod +x install_linux.sh uninstall_linux.sh
+  ./install_linux.sh
+  ```
+  *Check status and logs:*
+  ```bash
+  systemctl --user status edgeshield-client.service
+  journalctl --user -u edgeshield-client.service -f
+  ```
+  *Uninstall:*
+  ```bash
+  ./uninstall_linux.sh
+  ```
+
+* **System-wide Service (Requires Root):**
+  If deploying to a dedicated server appliance where a system daemon is preferred:
+  ```bash
+  sudo ./install_linux.sh --system
+  sudo systemctl status edgeshield-client.service
+  ```
+  *Uninstall:*
+  ```bash
+  sudo ./uninstall_linux.sh
+  ```
+
+### 2. Windows (Scheduled Task)
+
+Registers `EdgeShieldClient` in Windows Task Scheduler, ensuring non-blocking background execution with battery survival settings enabled.
+
+* **User Logon Trigger (Recommended — Standard User / No Admin Required):**
+  Starts automatically whenever you sign into Windows:
+  ```powershell
+  cd client\install
+  .\install_windows.ps1
+  ```
+  *Check status:*
+  ```powershell
+  Get-ScheduledTask -TaskName "EdgeShieldClient"
+  ```
+  *Tail logs:*
+  ```powershell
+  Get-Content -Wait -Tail 30 ..\logs\client.log
+  ```
+  *Uninstall:*
+  ```powershell
+  .\uninstall_windows.ps1
+  ```
+
+* **System Startup Trigger (Requires Elevated Administrator PowerShell):**
+  To launch at Windows boot before any user logs in, open PowerShell as Administrator and run:
+  ```powershell
+  cd client\install
+  .\install_windows.ps1 -AtStartup
+  ```
 
 ---
 

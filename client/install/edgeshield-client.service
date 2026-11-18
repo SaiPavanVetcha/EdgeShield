@@ -1,0 +1,17 @@
+[Unit]
+Description=EdgeShield PC Telemetry Client Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory={{CLIENT_DIR}}
+EnvironmentFile=-{{CLIENT_DIR}}/.env
+ExecStart={{PYTHON_PATH}} {{CLIENT_DIR}}/client.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy={{WANTED_BY}}

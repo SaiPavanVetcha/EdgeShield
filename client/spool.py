@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -7,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from config import SPOOL_DIR, SPOOL_MAX_RECORDS
 
+logger = logging.getLogger("edgeshield_client")
 _db_initialized = False
 
 
@@ -114,7 +116,7 @@ def fetch_batch(limit: int) -> List[Tuple[int, Dict[str, Any]]]:
             payload = json.loads(payload_json)
             batch.append((row_id, payload))
         except (json.JSONDecodeError, TypeError) as err:
-            print(f"[!] Warning: Corrupted spool record id={row_id} dropped: {err}")
+            logger.warning(f"[!] Warning: Corrupted spool record id={row_id} dropped: {err}")
             corrupted_ids.append(row_id)
 
     if corrupted_ids:
@@ -165,5 +167,7 @@ def maybe_trim(max_records: int = SPOOL_MAX_RECORDS) -> int:
         conn.commit()
         dropped = cursor.rowcount
 
-    print(f"[!] Warning: Spool exceeded {max_records} records. Dropped {dropped} oldest record(s).")
+    logger.warning(
+        f"[!] Warning: Spool exceeded {max_records} records. Dropped {dropped} oldest record(s)."
+    )
     return dropped
