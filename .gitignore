@@ -60,6 +60,12 @@ lerna-debug.log*
 htmlcov/
 .mypy_cache/
 
+# Local Client Spool
+spool/
+*.db
+*.db-wal
+*.db-shm
+
 # Node.js / Frontend (web/)
 node_modules/
 .pnpm-store/

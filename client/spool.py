@@ -1,0 +1,169 @@
+import json
+import os
+import sqlite3
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+from config import SPOOL_DIR, SPOOL_MAX_RECORDS
+
+_db_initialized = False
+
+
+def get_db_path() -> str:
+    """Returns the full path to the SQLite spool database file."""
+    os.makedirs(SPOOL_DIR, exist_ok=True)
+    return os.path.join(SPOOL_DIR, "telemetry_spool.db")
+
+
+@contextmanager
+def get_connection(db_path: Optional[str] = None):
+    """Context manager for SQLite connections with foreign keys and WAL enabled."""
+    ensure_initialized(db_path)
+    path = db_path or get_db_path()
+    conn = sqlite3.connect(path, timeout=10.0)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def init_db(db_path: Optional[str] = None) -> None:
+    """Initializes the SQLite spool database and creates required tables and indexes."""
+    path = db_path or get_db_path()
+    os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
+
+    conn = sqlite3.connect(path, timeout=10.0)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS spool (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def ensure_initialized(db_path: Optional[str] = None) -> None:
+    """Ensures that the database schema is initialized at least once."""
+    global _db_initialized
+    if not _db_initialized:
+        init_db(db_path)
+        _db_initialized = True
+
+
+def enqueue(payload: Dict[str, Any]) -> int:
+    """
+    Appends a telemetry payload dictionary to the local durable spool.
+    Trims oldest records if SPOOL_MAX_RECORDS is exceeded.
+    Returns the newly inserted record ID.
+    """
+    created_at = datetime.now(timezone.utc).isoformat()
+    payload_json = json.dumps(payload)
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO spool (created_at, payload_json) VALUES (?, ?)",
+            (created_at, payload_json),
+        )
+        conn.commit()
+        record_id = cursor.lastrowid
+
+    maybe_trim(SPOOL_MAX_RECORDS)
+    return record_id
+
+
+def count() -> int:
+    """Returns the total number of pending records in the spool."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM spool")
+        row = cursor.fetchone()
+        return row[0] if row else 0
+
+
+def fetch_batch(limit: int) -> List[Tuple[int, Dict[str, Any]]]:
+    """
+    Fetches up to `limit` oldest records from the spool in FIFO order.
+    Returns a list of (id, payload_dict) tuples.
+    Corrupted payloads are safely skipped and removed from the spool.
+    """
+    if limit <= 0:
+        return []
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, payload_json FROM spool ORDER BY id ASC LIMIT ?",
+            (limit,),
+        )
+        rows = cursor.fetchall()
+
+    batch: List[Tuple[int, Dict[str, Any]]] = []
+    corrupted_ids: List[int] = []
+
+    for row_id, payload_json in rows:
+        try:
+            payload = json.loads(payload_json)
+            batch.append((row_id, payload))
+        except (json.JSONDecodeError, TypeError) as err:
+            print(f"[!] Warning: Corrupted spool record id={row_id} dropped: {err}")
+            corrupted_ids.append(row_id)
+
+    if corrupted_ids:
+        delete_ids(corrupted_ids)
+
+    return batch
+
+
+def delete_ids(ids: List[int]) -> int:
+    """
+    Deletes records matching the specified IDs from the spool.
+    Returns the number of deleted records.
+    """
+    if not ids:
+        return 0
+
+    placeholders = ",".join("?" for _ in ids)
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"DELETE FROM spool WHERE id IN ({placeholders})", ids)
+        conn.commit()
+        return cursor.rowcount
+
+
+def maybe_trim(max_records: int = SPOOL_MAX_RECORDS) -> int:
+    """
+    If the spool exceeds max_records, drops the oldest records.
+    Returns the number of dropped records.
+    """
+    total = count()
+    if total <= max_records:
+        return 0
+
+    excess = total - max_records
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            DELETE FROM spool
+            WHERE id IN (
+                SELECT id FROM spool
+                ORDER BY id ASC
+                LIMIT ?
+            )
+            """,
+            (excess,),
+        )
+        conn.commit()
+        dropped = cursor.rowcount
+
+    print(f"[!] Warning: Spool exceeded {max_records} records. Dropped {dropped} oldest record(s).")
+    return dropped
