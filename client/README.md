@@ -35,6 +35,7 @@ The PC Client Agent runs on host workstations, laptops, or embedded Linux comput
    SERVER_PORT=5000
    SERVER_ENDPOINT=/metrics
    DEVICE_ID=PC-WORKSTATION-01
+   ROOM=Lab-A
    SAMPLING_INTERVAL_SECONDS=10
 
    # Spool & Batching Settings
@@ -73,11 +74,20 @@ The agent implements a local-first offline spool architecture:
 | `SERVER_PORT` | No | `5000` | Port of the Central Server |
 | `SERVER_ENDPOINT` | No | `/metrics` | HTTP path where metrics are posted |
 | `DEVICE_ID` | No | `PC-<hostname>` | Unique device identifier override |
+| `ROOM` | No | `""` | Optional location or room tag (e.g. `Lab-A`, `Server-Room`). Defaults to `""` (unassigned) |
 | `SAMPLING_INTERVAL_SECONDS` | No | `10` | Interval between metric collection cycles (seconds) |
 | `FLUSH_INTERVAL_SECONDS` | No | `60` | Maximum time between spool flush attempts (seconds) |
 | `FLUSH_MAX_RECORDS` | No | `20` | Batch size threshold that triggers an immediate flush |
 | `SPOOL_MAX_RECORDS` | No | `5000` | Maximum durable spool capacity before trimming oldest records |
 | `SPOOL_DIR` | No | `./spool` | Directory path where `telemetry_spool.db` is stored |
+
+### Setting Room / Location per Machine
+
+To organize telemetry by physical deployment location, set the `ROOM` variable in `client/.env` (e.g. `ROOM=Lab-A`) or supply it as an environment variable:
+```bash
+ROOM=Lab-A python client.py
+```
+If unset, `ROOM` defaults to `""` (unassigned), ensuring full backward compatibility with unsegmented telemetry fleets.
 
 ---
 

@@ -20,11 +20,15 @@ async def receive_metrics(request: Request, background_tasks: BackgroundTasks):
         # Offload Databricks I/O write operation to a background thread
         background_tasks.add_task(insert_telemetry_to_databricks, data)
 
-        return {
+        response = {
             "status": "success",
             "message": "Telemetry queued for Databricks persistence",
             "device_id": data.get("device_id"),
         }
+        if data.get("room"):
+            response["room"] = data.get("room")
+
+        return response
 
     except HTTPException:
         raise

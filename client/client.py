@@ -8,6 +8,7 @@ from config import (
     DEVICE_ID,
     FLUSH_INTERVAL_SECONDS,
     FLUSH_MAX_RECORDS,
+    ROOM,
     SAMPLING_INTERVAL,
     SERVER_URL,
     SPOOL_MAX_RECORDS,
@@ -27,6 +28,7 @@ def build_telemetry_payload() -> dict:
     return {
         "device_id": DEVICE_ID,
         "hostname": socket.gethostname(),
+        "room": ROOM,
         "type": "pc_telemetry",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "metrics": {
@@ -99,6 +101,7 @@ def main():
     print("[*] Modular EdgeShield Client Agent Initialized (Durable Spool Mode)")
     print(f"[*] Target Endpoint       : {SERVER_URL}")
     print(f"[*] Device Identity       : {DEVICE_ID}")
+    print(f"[*] Room / Location       : {ROOM if ROOM else '(unassigned)'}")
     print(f"[*] Sampling Cadence      : Every {SAMPLING_INTERVAL}s")
     print(f"[*] Flush Cadence         : Every {FLUSH_INTERVAL_SECONDS}s (or at {FLUSH_MAX_RECORDS} pending records)")
     print(f"[*] Spool Max Retention   : {SPOOL_MAX_RECORDS} records\n")

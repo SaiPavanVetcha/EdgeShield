@@ -69,6 +69,7 @@ def _background_batch_worker():
                     event_id = str(uuid.uuid4())
                     device_id = payload.get("device_id")
                     hostname = payload.get("hostname")
+                    room = payload.get("room")  # Optional location metadata (documented DDL gap for schema migration)
                     timestamp = datetime.now(timezone.utc).isoformat()
 
                     metrics = payload.get("metrics", {}) or {}

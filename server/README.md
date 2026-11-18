@@ -76,5 +76,19 @@ The Central Ingestion Server receives real-time telemetry payloads over HTTP fro
   ```http
   POST /metrics
   ```
-  Receives JSON telemetry payloads containing `device_id` and metrics. Queues data asynchronously and returns HTTP 200 immediately.
+  Receives JSON telemetry payloads containing `device_id`, optional `room`, and hardware `metrics`. Queues data asynchronously into the batch queue and returns HTTP 200 immediately.
+
+---
+
+## Schema & Lakehouse Migration Note (DDL Gap)
+
+The ingestion server accepts payloads with or without the optional `room` field (backward-compatible). Currently, the `edgeshield_db.system_metrics` landing table schema defines:
+```sql
+(event_id STRING, device_id STRING, hostname STRING, timestamp TIMESTAMP, platform STRING, boot_time_utc TIMESTAMP)
+```
+To persist `room` into Databricks when available, apply the following DDL migration to your Lakehouse:
+```sql
+ALTER TABLE edgeshield_db.system_metrics ADD COLUMN room STRING;
+```
+Until this migration is applied, the ingestion server safely buffers and processes incoming telemetry while preserving the existing database write contract.
 
