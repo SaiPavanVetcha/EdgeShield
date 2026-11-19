@@ -12,6 +12,7 @@ export interface Device {
   device_key: string;
   device_id: string;
   hostname: string;
+  room?: string | null;
   platform?: string;
   logical_cores?: number | null;
   physical_cores?: number | null;
@@ -49,6 +50,7 @@ export interface MetricKPI {
 export interface KPISummaryResponse {
   device_id: string;
   device_name: string;
+  room?: string | null;
   time_range_from: string;
   time_range_to: string;
   cpu: MetricKPI;

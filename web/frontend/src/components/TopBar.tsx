@@ -7,6 +7,7 @@ import {
   Check,
   Clock,
   Database,
+  MapPin,
 } from 'lucide-react';
 import { Device, PresetTimeRange, TimeRangeState } from '../types';
 
@@ -14,6 +15,9 @@ interface TopBarProps {
   devices: Device[];
   selectedDeviceId: string;
   onSelectDevice: (deviceId: string) => void;
+  selectedRoom?: string;
+  onSelectRoom?: (room: string) => void;
+  distinctRooms?: string[];
   timeRange: TimeRangeState;
   onChangePreset: (preset: PresetTimeRange) => void;
   onApplyCustomRange: (from: string, to: string) => void;
@@ -26,6 +30,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   devices,
   selectedDeviceId,
   onSelectDevice,
+  selectedRoom = 'all',
+  onSelectRoom,
+  distinctRooms = [],
   timeRange,
   onChangePreset,
   onApplyCustomRange,
@@ -34,6 +41,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   isCached,
 }) => {
   const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false);
+  const [roomDropdownOpen, setRoomDropdownOpen] = useState(false);
   const [customRangeOpen, setCustomRangeOpen] = useState(false);
 
   // Default custom inputs from current timeRange ISO string formatted as YYYY-MM-DDTHH:mm
@@ -62,98 +70,183 @@ export const TopBar: React.FC<TopBarProps> = ({
     }
   };
 
+  const visibleDevices = selectedRoom && selectedRoom !== 'all'
+    ? devices.filter((d) => (d.room || '').trim() === selectedRoom.trim())
+    : devices;
+
   return (
     <div className="bg-[#0b1021]/90 backdrop-blur-md border-b border-slate-800/80 px-6 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20">
-      {/* Left: Device Selector */}
-      <div className="relative">
-        <button
-          onClick={() => {
-            setDeviceDropdownOpen(!deviceDropdownOpen);
-            setCustomRangeOpen(false);
-          }}
-          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700/80 text-sm font-medium text-slate-100 hover:border-slate-600 transition-colors"
-        >
-          <Monitor className="w-4 h-4 text-sky-400" />
-          <span>
-            {selectedDeviceId === 'all'
-              ? 'All Devices (Fleet)'
-              : selectedDevice?.hostname || selectedDeviceId}
-          </span>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-        </button>
+      {/* Left: Room & Device Selectors */}
+      <div className="flex items-center gap-2.5">
+        {/* Room Filter Selector */}
+        {distinctRooms && distinctRooms.length > 0 && onSelectRoom && (
+          <div className="relative">
+            <button
+              onClick={() => {
+                setRoomDropdownOpen(!roomDropdownOpen);
+                setDeviceDropdownOpen(false);
+                setCustomRangeOpen(false);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700/80 text-sm font-medium text-slate-100 hover:border-slate-600 transition-colors"
+            >
+              <MapPin className="w-3.5 h-3.5 text-amber-400" />
+              <span>{selectedRoom === 'all' ? 'All Rooms' : selectedRoom}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            </button>
 
-        {deviceDropdownOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-30"
-              onClick={() => setDeviceDropdownOpen(false)}
-            />
-            <div className="absolute left-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-40 py-1 overflow-hidden">
-              <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
-                Select Scope
-              </div>
-              <button
-                onClick={() => {
-                  onSelectDevice('all');
-                  setDeviceDropdownOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium hover:bg-slate-800/80 transition-colors ${
-                  selectedDeviceId === 'all' ? 'text-sky-400 bg-slate-800/40' : 'text-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-sky-400" />
-                  <span>All Devices (Fleet Aggregation)</span>
-                </div>
-                {selectedDeviceId === 'all' && <Check className="w-3.5 h-3.5 text-sky-400" />}
-              </button>
-
-              <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-y border-slate-800 mt-1">
-                Individual Devices ({devices.length})
-              </div>
-
-              <div className="max-h-60 overflow-y-auto">
-                {devices.length === 0 ? (
-                  <div className="px-3 py-3 text-xs text-slate-400 text-center">
-                    No devices registered in dim_device
+            {roomDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setRoomDropdownOpen(false)}
+                />
+                <div className="absolute left-0 mt-2 w-52 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-40 py-1 overflow-hidden">
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                    Filter by Room
                   </div>
-                ) : (
-                  devices.map((dev) => (
+                  <button
+                    onClick={() => {
+                      onSelectRoom('all');
+                      setRoomDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium hover:bg-slate-800/80 transition-colors ${
+                      selectedRoom === 'all' ? 'text-amber-400 bg-slate-800/40' : 'text-slate-300'
+                    }`}
+                  >
+                    <span>All Rooms</span>
+                    {selectedRoom === 'all' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                  </button>
+                  {distinctRooms.map((r) => (
                     <button
-                      key={dev.device_id}
+                      key={r}
                       onClick={() => {
-                        onSelectDevice(dev.device_id);
-                        setDeviceDropdownOpen(false);
+                        onSelectRoom(r);
+                        setRoomDropdownOpen(false);
                       }}
                       className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium hover:bg-slate-800/80 transition-colors ${
-                        selectedDeviceId === dev.device_id
-                          ? 'text-sky-400 bg-slate-800/40'
-                          : 'text-slate-300'
+                        selectedRoom === r ? 'text-amber-400 bg-slate-800/40' : 'text-slate-300'
                       }`}
                     >
-                      <div className="flex items-center gap-2 truncate">
-                        <span
-                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            dev.status === 'online'
-                              ? 'bg-emerald-400'
-                              : dev.status === 'warning'
-                              ? 'bg-amber-400'
-                              : 'bg-slate-500'
-                          }`}
-                        />
-                        <span className="truncate">{dev.hostname}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">({dev.platform})</span>
-                      </div>
-                      {selectedDeviceId === dev.device_id && (
-                        <Check className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
-                      )}
+                      <span className="truncate">{r}</span>
+                      {selectedRoom === r && <Check className="w-3.5 h-3.5 text-amber-400" />}
                     </button>
-                  ))
-                )}
-              </div>
-            </div>
-          </>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
+
+        {/* Device Selector */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setDeviceDropdownOpen(!deviceDropdownOpen);
+              setRoomDropdownOpen(false);
+              setCustomRangeOpen(false);
+            }}
+            className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700/80 text-sm font-medium text-slate-100 hover:border-slate-600 transition-colors"
+          >
+            <Monitor className="w-4 h-4 text-sky-400" />
+            <span>
+              {selectedDeviceId === 'all'
+                ? selectedRoom && selectedRoom !== 'all'
+                  ? `All in ${selectedRoom}`
+                  : 'All Devices (Fleet)'
+                : selectedDevice?.hostname || selectedDeviceId}
+            </span>
+            {selectedDeviceId !== 'all' && selectedDevice?.room && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-300 border border-sky-800/60 font-mono">
+                {selectedDevice.room}
+              </span>
+            )}
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+
+          {deviceDropdownOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-30"
+                onClick={() => setDeviceDropdownOpen(false)}
+              />
+              <div className="absolute left-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-40 py-1 overflow-hidden">
+                <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                  Select Scope
+                </div>
+                <button
+                  onClick={() => {
+                    onSelectDevice('all');
+                    setDeviceDropdownOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium hover:bg-slate-800/80 transition-colors ${
+                    selectedDeviceId === 'all' ? 'text-sky-400 bg-slate-800/40' : 'text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-sky-400" />
+                    <span>
+                      {selectedRoom && selectedRoom !== 'all'
+                        ? `All Devices in ${selectedRoom}`
+                        : 'All Devices (Fleet Aggregation)'}
+                    </span>
+                  </div>
+                  {selectedDeviceId === 'all' && <Check className="w-3.5 h-3.5 text-sky-400" />}
+                </button>
+
+                <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-y border-slate-800 mt-1">
+                  Individual Devices ({visibleDevices.length})
+                </div>
+
+                <div className="max-h-60 overflow-y-auto">
+                  {visibleDevices.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-slate-400 text-center">
+                      {selectedRoom && selectedRoom !== 'all'
+                        ? `No devices registered in ${selectedRoom}`
+                        : 'No devices registered in dim_device'}
+                    </div>
+                  ) : (
+                    visibleDevices.map((dev) => (
+                      <button
+                        key={dev.device_id}
+                        onClick={() => {
+                          onSelectDevice(dev.device_id);
+                          setDeviceDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium hover:bg-slate-800/80 transition-colors ${
+                          selectedDeviceId === dev.device_id
+                            ? 'text-sky-400 bg-slate-800/40'
+                            : 'text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <span
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              dev.status === 'online'
+                                ? 'bg-emerald-400'
+                                : dev.status === 'warning'
+                                ? 'bg-amber-400'
+                                : 'bg-slate-500'
+                            }`}
+                          />
+                          <span className="truncate">{dev.hostname}</span>
+                          {dev.room && (
+                            <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-300 font-mono border border-sky-800/60 shrink-0">
+                              {dev.room}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-400 font-mono">({dev.platform})</span>
+                        </div>
+                        {selectedDeviceId === dev.device_id && (
+                          <Check className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Right: Time Range Buttons, Custom Picker, and Refresh */}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { api } from '../services/api';
 import {
   Device,
@@ -13,10 +13,35 @@ import {
 export function useTelemetry() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('all');
+  const [selectedRoom, setSelectedRoomState] = useState<string>('all');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isWakingUp, setIsWakingUp] = useState<boolean>(false);
   const [warehouseStatus, setWarehouseStatus] = useState<string>('online');
   const [isCached, setIsCached] = useState<boolean>(false);
+
+  // Derive distinct non-empty rooms from devices
+  const distinctRooms = useMemo(() => {
+    const set = new Set<string>();
+    devices.forEach((d) => {
+      if (d.room && d.room.trim() !== '') {
+        set.add(d.room.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [devices]);
+
+  const setSelectedRoom = useCallback(
+    (room: string) => {
+      setSelectedRoomState(room);
+      if (room !== 'all' && selectedDeviceId !== 'all') {
+        const dev = devices.find((d) => d.device_id === selectedDeviceId);
+        if (!dev || (dev.room || '').trim() !== room.trim()) {
+          setSelectedDeviceId('all');
+        }
+      }
+    },
+    [devices, selectedDeviceId]
+  );
 
   // Time range calculation helper
   const calculatePresetRange = (preset: PresetTimeRange): { from: string; to: string } => {
@@ -81,12 +106,12 @@ export function useTelemetry() {
     setIsLoading(true);
     try {
       const [kpiRes, cpuRes, ramRes, diskRes, battRes, envRes] = await Promise.all([
-        api.getKPIs(selectedDeviceId, timeRange.from, timeRange.to),
-        api.getTimeseries(selectedDeviceId, 'cpu', timeRange.from, timeRange.to),
-        api.getTimeseries(selectedDeviceId, 'ram', timeRange.from, timeRange.to),
-        api.getTimeseries(selectedDeviceId, 'disk', timeRange.from, timeRange.to),
-        api.getTimeseries(selectedDeviceId, 'battery', timeRange.from, timeRange.to),
-        api.getTimeseries(selectedDeviceId, 'environment', timeRange.from, timeRange.to),
+        api.getKPIs(selectedDeviceId, timeRange.from, timeRange.to, selectedRoom),
+        api.getTimeseries(selectedDeviceId, 'cpu', timeRange.from, timeRange.to, selectedRoom),
+        api.getTimeseries(selectedDeviceId, 'ram', timeRange.from, timeRange.to, selectedRoom),
+        api.getTimeseries(selectedDeviceId, 'disk', timeRange.from, timeRange.to, selectedRoom),
+        api.getTimeseries(selectedDeviceId, 'battery', timeRange.from, timeRange.to, selectedRoom),
+        api.getTimeseries(selectedDeviceId, 'environment', timeRange.from, timeRange.to, selectedRoom),
       ]);
 
       setKpis(kpiRes);
@@ -103,7 +128,7 @@ export function useTelemetry() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDeviceId, timeRange.from, timeRange.to]);
+  }, [selectedDeviceId, selectedRoom, timeRange.from, timeRange.to]);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([fetchHealth(), fetchDevices(), fetchAlerts(), fetchTelemetry()]);
@@ -161,6 +186,9 @@ export function useTelemetry() {
     devices,
     selectedDeviceId,
     setSelectedDeviceId,
+    selectedRoom,
+    setSelectedRoom,
+    distinctRooms,
     timeRange,
     handleSelectPreset,
     handleApplyCustomRange,

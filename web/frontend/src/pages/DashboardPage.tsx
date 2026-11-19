@@ -7,6 +7,7 @@ import {
   Thermometer,
   Droplets,
   Server,
+  MapPin,
 } from 'lucide-react';
 import { TopBar } from '../components/TopBar';
 import { WarehouseAlertBanner } from '../components/WarehouseAlertBanner';
@@ -35,6 +36,9 @@ export const DashboardPage: React.FC = () => {
     devices,
     selectedDeviceId,
     setSelectedDeviceId,
+    selectedRoom,
+    setSelectedRoom,
+    distinctRooms,
     timeRange,
     handleSelectPreset,
     handleApplyCustomRange,
@@ -51,6 +55,12 @@ export const DashboardPage: React.FC = () => {
     refreshAll,
     handleWakeUpWarehouse,
   } = useTelemetry();
+
+  const selectedDevice = useMemo(
+    () => devices.find((d) => d.device_id === selectedDeviceId),
+    [devices, selectedDeviceId]
+  );
+  const hasBattery = selectedDeviceId === 'all' || selectedDevice?.capabilities?.has_battery !== false;
 
   // Prepare individual chart datasets
   const cpuData = useMemo(() => {
@@ -178,7 +188,7 @@ export const DashboardPage: React.FC = () => {
         title: 'Power & Battery',
         subtitle: 'Current charge level and battery health capacity',
         data: batteryData,
-        available: Boolean(batteryTs?.available && batteryData.length > 0),
+        available: Boolean(hasBattery && batteryTs?.available && batteryData.length > 0),
         yDomain: [0, 100],
         lines: [
           {
@@ -196,7 +206,7 @@ export const DashboardPage: React.FC = () => {
         ],
       },
     ],
-    [cpuData, cpuTs, ramData, ramTs, diskData, diskTs, envData, envTs, batteryData, batteryTs]
+    [cpuData, cpuTs, ramData, ramTs, diskData, diskTs, envData, envTs, batteryData, batteryTs, hasBattery]
   );
 
   // Available charts that have actual data
@@ -228,6 +238,9 @@ export const DashboardPage: React.FC = () => {
         devices={devices}
         selectedDeviceId={selectedDeviceId}
         onSelectDevice={setSelectedDeviceId}
+        selectedRoom={selectedRoom}
+        onSelectRoom={setSelectedRoom}
+        distinctRooms={distinctRooms}
         timeRange={timeRange}
         onChangePreset={handleSelectPreset}
         onApplyCustomRange={handleApplyCustomRange}
@@ -247,11 +260,21 @@ export const DashboardPage: React.FC = () => {
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2 border-b border-slate-800/40">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-100 tracking-tight">
-              {selectedDeviceId === 'all'
-                ? 'Fleet Telemetry Overview'
-                : `Device: ${devices.find((d) => d.device_id === selectedDeviceId)?.hostname || selectedDeviceId}`}
-            </h1>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-100 tracking-tight">
+                {selectedDeviceId === 'all'
+                  ? selectedRoom === 'all'
+                    ? 'Fleet Telemetry Overview'
+                    : `Fleet Telemetry (${selectedRoom})`
+                  : `Device: ${selectedDevice?.hostname || selectedDeviceId}`}
+              </h1>
+              {selectedDeviceId !== 'all' && selectedDevice?.room && (
+                <span className="inline-flex items-center gap-1 text-xs font-mono font-medium px-2 py-0.5 rounded bg-sky-950/80 text-sky-300 border border-sky-800/60">
+                  <MapPin className="w-3 h-3 text-amber-400" />
+                  {selectedDevice.room}
+                </span>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
               Live observability powered by Databricks Gold Layer (edgeshield_lakehouse.gold)
             </p>
@@ -311,12 +334,14 @@ export const DashboardPage: React.FC = () => {
               icon={HardDrive}
               colorClass="text-amber-400"
             />
-            <KPICard
-              title="Battery"
-              kpi={kpis.battery}
-              icon={BatteryCharging}
-              colorClass="text-purple-400"
-            />
+            {hasBattery && (
+              <KPICard
+                title="Battery"
+                kpi={kpis.battery}
+                icon={BatteryCharging}
+                colorClass="text-purple-400"
+              />
+            )}
             <KPICard
               title="Temperature"
               kpi={kpis.temperature}

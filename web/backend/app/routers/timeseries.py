@@ -20,6 +20,7 @@ def get_timeseries(
     metric: str = Query("cpu", description="cpu | ram | disk | battery | temperature | humidity | environment"),
     from_time: Optional[str] = Query(None, alias="from", description="Start timestamp"),
     to_time: Optional[str] = Query(None, alias="to", description="End timestamp"),
+    room: Optional[str] = Query(None, description="Optional room filter when device_id is 'all'"),
 ):
     """
     Returns time series points downsampled cleanly for the requested metric.
@@ -34,6 +35,7 @@ def get_timeseries(
             device_id=device_id,
             from_ts=start_ts,
             to_ts=end_ts,
+            room=room,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

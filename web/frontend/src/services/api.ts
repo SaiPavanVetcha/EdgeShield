@@ -35,14 +35,18 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  async getDevices(): Promise<DeviceListResponse> {
-    return fetchJson<DeviceListResponse>('/api/devices');
+  async getDevices(room?: string): Promise<DeviceListResponse> {
+    const params = new URLSearchParams();
+    if (room && room !== 'all') params.set('room', room);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return fetchJson<DeviceListResponse>(`/api/devices${query}`);
   },
 
-  async getKPIs(deviceId: string = 'all', from?: string, to?: string): Promise<KPISummaryResponse> {
+  async getKPIs(deviceId: string = 'all', from?: string, to?: string, room?: string): Promise<KPISummaryResponse> {
     const params = new URLSearchParams({ device_id: deviceId });
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    if (room && room !== 'all') params.set('room', room);
     return fetchJson<KPISummaryResponse>(`/api/kpis?${params.toString()}`);
   },
 
@@ -50,11 +54,13 @@ export const api = {
     deviceId: string = 'all',
     metric: string = 'cpu',
     from?: string,
-    to?: string
+    to?: string,
+    room?: string
   ): Promise<TimeseriesResponse> {
     const params = new URLSearchParams({ device_id: deviceId, metric });
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    if (room && room !== 'all') params.set('room', room);
     return fetchJson<TimeseriesResponse>(`/api/timeseries?${params.toString()}`);
   },
 

@@ -25,26 +25,44 @@ class DatabricksService:
             return dt.strftime("%Y-%m-%d %H:%M:%S")
         return str(dt)
 
-    def get_devices(self) -> DeviceListResponse:
+    def get_devices(self, room: Optional[str] = None) -> DeviceListResponse:
         """
         Query dim_device and calculate real-time status and telemetry capabilities.
+        Optionally filter by room.
         """
-        cache_key = "devices_list"
+        cache_key = f"devices_list_{room}" if room and room != "all" else "devices_list"
         # 1. Fetch devices from dim_device
-        sql_dim = f"""
-            SELECT
-                device_key,
-                device_id,
-                hostname,
-                platform,
-                logical_cores,
-                physical_cores,
-                last_boot_time_utc,
-                _updated_at
-            FROM {self.prefix}.dim_device
-            ORDER BY hostname ASC
-        """
-        dim_rows, is_cached, status = db_manager.execute_query(sql_dim, cache_key=cache_key)
+        try:
+            sql_dim = f"""
+                SELECT
+                    device_key,
+                    device_id,
+                    hostname,
+                    room,
+                    platform,
+                    logical_cores,
+                    physical_cores,
+                    last_boot_time_utc,
+                    _updated_at
+                FROM {self.prefix}.dim_device
+                ORDER BY hostname ASC
+            """
+            dim_rows, is_cached, status = db_manager.execute_query(sql_dim, cache_key=cache_key)
+        except Exception:
+            sql_dim = f"""
+                SELECT
+                    device_key,
+                    device_id,
+                    hostname,
+                    platform,
+                    logical_cores,
+                    physical_cores,
+                    last_boot_time_utc,
+                    _updated_at
+                FROM {self.prefix}.dim_device
+                ORDER BY hostname ASC
+            """
+            dim_rows, is_cached, status = db_manager.execute_query(sql_dim, cache_key=cache_key)
 
         if not dim_rows:
             return DeviceListResponse(
@@ -56,6 +74,9 @@ class DatabricksService:
                 is_cached=is_cached,
                 warehouse_status=status,
             )
+
+        if room and room != "all":
+            dim_rows = [r for r in dim_rows if (r.get("room") or "").strip() == room.strip()]
 
         # 2. Get latest event_timestamp per device to calculate last_seen and online status
         sql_last_seen = f"""
@@ -141,6 +162,7 @@ class DatabricksService:
                     device_key=dev_key,
                     device_id=row["device_id"],
                     hostname=row.get("hostname") or row["device_id"],
+                    room=row.get("room"),
                     platform=row.get("platform") or "Unknown",
                     logical_cores=row.get("logical_cores"),
                     physical_cores=row.get("physical_cores"),
@@ -170,19 +192,44 @@ class DatabricksService:
             return rows[0]["device_key"]
         return None
 
-    def get_kpis(self, device_id: str, from_ts: str, to_ts: str) -> KPISummaryResponse:
+    def get_kpis(self, device_id: str, from_ts: str, to_ts: str, room: Optional[str] = None) -> KPISummaryResponse:
         """
         Calculates KPIs for CPU, RAM, Disk, Battery, Temperature, Humidity.
         Each metric is queried independently to handle ESP32 / PC client timestamp mismatches.
         """
-        device_key = self._resolve_device_key(device_id) if device_id != "all" else None
-        filter_clause = f"device_key = '{device_key}' AND" if device_key else ""
-        cache_key = f"kpis_{device_id}_{from_ts}_{to_ts}"
+        device_key = None
+        device_name = "Fleet Overview"
+        resolved_room = None
+
+        if device_id != "all":
+            try:
+                sql_dev = f"SELECT device_key, hostname, room FROM {self.prefix}.dim_device WHERE device_id = '{device_id}' LIMIT 1"
+                dev_rows, _, _ = db_manager.execute_query(sql_dev, cache_key=f"dev_meta_{device_id}")
+                if dev_rows:
+                    device_key = dev_rows[0]["device_key"]
+                    device_name = dev_rows[0].get("hostname") or device_id
+                    resolved_room = dev_rows[0].get("room")
+            except Exception:
+                device_key = self._resolve_device_key(device_id)
+                device_name = device_id
+        elif room and room != "all":
+            device_name = f"Fleet Overview ({room})"
+            resolved_room = room
+
+        if device_key:
+            filter_clause = f"device_key = '{device_key}' AND"
+        elif room and room != "all":
+            filter_clause = f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = '{room}') AND"
+        else:
+            filter_clause = ""
+
+        cache_key = f"kpis_{device_id}_{room}_{from_ts}_{to_ts}"
 
         # Default empty response
         res = KPISummaryResponse(
             device_id=device_id,
-            device_name="Fleet Overview" if device_id == "all" else device_id,
+            device_name=device_name,
+            room=resolved_room,
             time_range_from=from_ts,
             time_range_to=to_ts,
             cpu=MetricKPI(available=False, unit="%"),
@@ -343,13 +390,20 @@ class DatabricksService:
         device_id: str,
         from_ts: str,
         to_ts: str,
+        room: Optional[str] = None,
     ) -> TimeseriesResponse:
         """
         Fetches downsampled or aggregated time series points for charting.
         """
         device_key = self._resolve_device_key(device_id) if device_id != "all" else None
-        filter_clause = f"device_key = '{device_key}' AND" if device_key else ""
-        cache_key = f"ts_{metric}_{device_id}_{from_ts}_{to_ts}"
+        if device_key:
+            filter_clause = f"device_key = '{device_key}' AND"
+        elif room and room != "all":
+            filter_clause = f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = '{room}') AND"
+        else:
+            filter_clause = ""
+
+        cache_key = f"ts_{metric}_{device_id}_{room}_{from_ts}_{to_ts}"
 
         # Choose table and column expressions
         table_name = ""

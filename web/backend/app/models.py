@@ -15,6 +15,7 @@ class DeviceSummary(BaseModel):
     device_key: str
     device_id: str
     hostname: str
+    room: Optional[str] = None
     platform: Optional[str] = "Unknown"
     logical_cores: Optional[int] = None
     physical_cores: Optional[int] = None
@@ -52,6 +53,7 @@ class MetricKPI(BaseModel):
 class KPISummaryResponse(BaseModel):
     device_id: str
     device_name: str
+    room: Optional[str] = None
     time_range_from: str
     time_range_to: str
     cpu: MetricKPI

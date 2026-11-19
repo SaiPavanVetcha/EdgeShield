@@ -12,6 +12,7 @@ import {
   HardDrive,
   Battery,
   Thermometer,
+  MapPin,
 } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
 import { useTelemetry } from '../hooks/useTelemetry';
@@ -19,7 +20,7 @@ import { DeviceStatus } from '../types';
 
 export const DevicesPage: React.FC = () => {
   const navigate = useNavigate();
-  const { devices, setSelectedDeviceId } = useTelemetry();
+  const { devices, setSelectedDeviceId, selectedRoom, setSelectedRoom, distinctRooms } = useTelemetry();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | DeviceStatus>('all');
 
@@ -28,13 +29,15 @@ export const DevicesPage: React.FC = () => {
       const matchesSearch =
         d.hostname.toLowerCase().includes(searchQuery.toLowerCase()) ||
         d.device_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (d.room && d.room.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (d.platform && d.platform.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesStatus = statusFilter === 'all' || d.status === statusFilter;
+      const matchesRoom = selectedRoom === 'all' || (d.room || '').trim() === selectedRoom.trim();
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesRoom;
     });
-  }, [devices, searchQuery, statusFilter]);
+  }, [devices, searchQuery, statusFilter, selectedRoom]);
 
   const counts = useMemo(() => {
     return {
@@ -104,32 +107,67 @@ export const DevicesPage: React.FC = () => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#0f172a] border border-slate-800 rounded-xl p-3">
-        <div className="relative w-full sm:w-80">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-[#0f172a] border border-slate-800 rounded-xl p-3">
+        <div className="relative w-full md:w-72">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Search hostname, ID, platform..."
+            placeholder="Search hostname, ID, room, platform..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
           />
         </div>
 
-        <div className="flex items-center gap-1.5 w-full sm:w-auto">
-          {(['all', 'online', 'warning', 'offline'] as const).map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${
-                statusFilter === status
-                  ? 'bg-sky-500 text-white'
-                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-              }`}
-            >
-              {status}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Room Filter Pills */}
+          {distinctRooms.length > 0 && (
+            <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+              <span className="text-[10.5px] text-slate-400 font-medium px-2 flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-amber-400" /> Room:
+              </span>
+              <button
+                onClick={() => setSelectedRoom('all')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                  selectedRoom === 'all'
+                    ? 'bg-amber-500/20 text-amber-300 font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                All
+              </button>
+              {distinctRooms.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setSelectedRoom(r)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                    selectedRoom === r
+                      ? 'bg-amber-500/20 text-amber-300 font-semibold'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Status Filter */}
+          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+            {(['all', 'online', 'warning', 'offline'] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-2.5 py-0.5 rounded text-[11px] font-medium capitalize transition-colors ${
+                  statusFilter === status
+                    ? 'bg-sky-500 text-white font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -140,6 +178,7 @@ export const DevicesPage: React.FC = () => {
             <thead className="bg-[#0b1021] text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3 px-4">Device / Hostname</th>
+                <th className="py-3 px-4">Room</th>
                 <th className="py-3 px-4">Platform</th>
                 <th className="py-3 px-4">Cores</th>
                 <th className="py-3 px-4">Telemetry Feeds</th>
@@ -151,7 +190,7 @@ export const DevicesPage: React.FC = () => {
             <tbody className="divide-y divide-slate-800/60">
               {filteredDevices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
                     No devices match the active filter or no rows in dim_device.
                   </td>
                 </tr>
@@ -164,6 +203,16 @@ export const DevicesPage: React.FC = () => {
                     <td className="py-3 px-4">
                       <div className="font-semibold text-slate-200">{dev.hostname}</div>
                       <div className="font-mono text-[10px] text-slate-400">{dev.device_id}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      {dev.room ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-950/70 text-sky-300 border border-sky-800/60 font-mono text-[11px]">
+                          <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
+                          {dev.room}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 italic text-[11px]">Unassigned</span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-slate-300">
                       {dev.platform || 'Linux / Unknown'}
