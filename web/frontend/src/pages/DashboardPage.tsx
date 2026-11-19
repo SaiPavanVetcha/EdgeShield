@@ -60,7 +60,22 @@ export const DashboardPage: React.FC = () => {
     () => devices.find((d) => d.device_id === selectedDeviceId),
     [devices, selectedDeviceId]
   );
-  const hasBattery = selectedDeviceId === 'all' || selectedDevice?.capabilities?.has_battery !== false;
+
+  const hasBattery = useMemo(() => {
+    if (selectedDeviceId !== 'all') {
+      return selectedDevice?.capabilities?.has_battery === true;
+    }
+    // When selectedDeviceId === 'all', check if any device in scope has battery capability
+    const inScopeDevices =
+      selectedRoom && selectedRoom !== 'all'
+        ? devices.filter((d) => (d.room || '').toLowerCase() === selectedRoom.toLowerCase())
+        : devices;
+
+    if (inScopeDevices.length > 0) {
+      return inScopeDevices.some((d) => d.capabilities?.has_battery === true);
+    }
+    return Boolean(kpis?.battery?.available);
+  }, [selectedDeviceId, selectedDevice, selectedRoom, devices, kpis]);
 
   // Prepare individual chart datasets
   const cpuData = useMemo(() => {

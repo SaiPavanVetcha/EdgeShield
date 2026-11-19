@@ -252,7 +252,7 @@ class AlertEngine:
                 )
             )
 
-        # 6. Battery low (< 20%) or Battery health low (< 60%)
+        # 6. Battery low (< 20%) or Battery health low (< 60%) - only for devices with battery
         sql_batt = f"""
             SELECT
                 d.device_id,
@@ -263,11 +263,15 @@ class AlertEngine:
             FROM {self.prefix}.fact_battery_telemetry b
             JOIN {self.prefix}.dim_device d ON b.device_key = d.device_key
             WHERE b.event_timestamp >= '{recent_window_ts}'
+              AND b.battery_pct IS NOT NULL
             GROUP BY d.device_id, d.hostname
-            HAVING MIN(b.battery_pct) < 20.0 OR MIN(b.battery_health_pct) < 60.0
+            HAVING (MIN(b.battery_pct) IS NOT NULL AND MIN(b.battery_pct) < 20.0)
+                OR (MIN(b.battery_health_pct) IS NOT NULL AND MIN(b.battery_health_pct) < 60.0)
         """
         batt_rows, _, _ = db_manager.execute_query(sql_batt, cache_key="alerts_batt")
         for r in batt_rows:
+            if r.get("min_batt") is None and r.get("min_health") is None:
+                continue
             dev_id = r["device_id"]
             min_b = round(float(r["min_batt"]), 1) if r.get("min_batt") is not None else 100.0
             min_h = round(float(r["min_health"]), 1) if r.get("min_health") is not None else 100.0

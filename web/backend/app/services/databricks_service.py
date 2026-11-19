@@ -100,7 +100,8 @@ class DatabricksService:
         last_seen_map = {row["device_key"]: row.get("last_seen") for row in last_seen_rows}
 
         # 3. Check capabilities (battery, environment)
-        sql_battery_devs = f"SELECT DISTINCT device_key FROM {self.prefix}.fact_battery_telemetry"
+        # Only devices that have reported non-null battery percentage have an actual battery (laptops vs desktops)
+        sql_battery_devs = f"SELECT DISTINCT device_key FROM {self.prefix}.fact_battery_telemetry WHERE battery_pct IS NOT NULL"
         battery_rows, _, _ = db_manager.execute_query(sql_battery_devs, cache_key="devs_battery", use_cache=True)
         battery_keys = {row["device_key"] for row in battery_rows}
 
@@ -321,13 +322,13 @@ class DatabricksService:
                 subtext=f"{free_g} GB free" if free_g is not None else None,
             )
 
-        # 4. Battery KPI
+        # 4. Battery KPI (only compute for devices reporting battery_pct IS NOT NULL)
         sql_battery = f"""
             SELECT
                 AVG(battery_pct) AS avg_battery,
                 AVG(battery_health_pct) AS avg_health
             FROM {self.prefix}.fact_battery_telemetry
-            WHERE {filter_clause} event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
+            WHERE {filter_clause} battery_pct IS NOT NULL AND event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
         """
         battery_rows, _, _ = db_manager.execute_query(sql_battery, cache_key=f"{cache_key}_battery")
         if battery_rows and battery_rows[0].get("avg_battery") is not None:
@@ -438,6 +439,8 @@ class DatabricksService:
         else:
             return TimeseriesResponse(metric=metric, device_id=device_id, available=False, points=[])
 
+        extra_filter = f"AND {val_expr} IS NOT NULL" if m == "battery" else ""
+
         sql = f"""
             SELECT
                 DATE_TRUNC('minute', event_timestamp) AS ts,
@@ -446,7 +449,7 @@ class DatabricksService:
                 MIN({val_expr}) AS min_val,
                 MAX({val_expr}) AS max_val
             FROM {table_name}
-            WHERE {filter_clause} event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
+            WHERE {filter_clause} {extra_filter} event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
             GROUP BY 1
             ORDER BY ts ASC
             LIMIT 500
