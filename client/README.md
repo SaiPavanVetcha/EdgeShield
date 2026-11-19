@@ -116,7 +116,7 @@ If you prefer to configure the virtual environment and service manually:
    ```bash
    python client.py
    ```
-   The agent will initialize the local spool (`spool/telemetry_spool.db`), collect metrics every `SAMPLING_INTERVAL_SECONDS`, and flush pending records based on time or record count.
+   The agent will initialize the local spool (`client/spool/telemetry_spool.db`), collect metrics every `SAMPLING_INTERVAL_SECONDS`, and flush pending records based on time or record count.
 
 ---
 
@@ -130,6 +130,9 @@ The agent implements a local-first offline spool architecture:
    * Total pending record count reaches or exceeds `FLUSH_MAX_RECORDS` (default: 20 records).
 3. **Fault-Tolerant Delivery:** Records are POSTed one by one. Successfully sent records are removed immediately from the spool. If the server is unreachable or times out, the flush halts instantly and the remaining records are safely retained for the next cycle.
 4. **FIFO Buffer Cap:** If the spool reaches `SPOOL_MAX_RECORDS` (default: 5000), the oldest records are automatically trimmed to preserve disk space and a console warning is emitted.
+
+> [!NOTE]
+> **Spool Directory Location:** By default, the local SQLite spool lives under `client/spool/` (`telemetry_spool.db`), resolved relative to the client package directory (`BASE_DIR`). This guarantees the spool database is always created inside the client folder regardless of your process current working directory.
 
 ---
 
@@ -146,9 +149,9 @@ The agent implements a local-first offline spool architecture:
 | `FLUSH_INTERVAL_SECONDS` | No | `60` | Maximum time between spool flush attempts (seconds) |
 | `FLUSH_MAX_RECORDS` | No | `20` | Batch size threshold that triggers an immediate flush |
 | `SPOOL_MAX_RECORDS` | No | `5000` | Maximum durable spool capacity before trimming oldest records |
-| `SPOOL_DIR` | No | `./spool` | Directory path where `telemetry_spool.db` is stored |
-| `LOG_DIR` | No | `./logs` | Directory path where client logs are stored |
-| `LOG_FILE` | No | `./logs/client.log` | Target file for rotating agent logs |
+| `SPOOL_DIR` | No | `client/spool` | Directory path where `telemetry_spool.db` is stored (default: `client/spool` relative to client package) |
+| `LOG_DIR` | No | `client/logs` | Directory path where client logs are stored |
+| `LOG_FILE` | No | `client/logs/client.log` | Target file for rotating agent logs |
 
 ### Setting Room / Location per Machine
 

@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Server Settings
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 SERVER_PORT = os.getenv("SERVER_PORT", "5000")
@@ -22,9 +24,8 @@ FLUSH_INTERVAL_SECONDS = int(os.getenv("FLUSH_INTERVAL_SECONDS", "60"))
 FLUSH_INTERVAL = FLUSH_INTERVAL_SECONDS
 FLUSH_MAX_RECORDS = int(os.getenv("FLUSH_MAX_RECORDS", "20"))
 SPOOL_MAX_RECORDS = int(os.getenv("SPOOL_MAX_RECORDS", "5000"))
-SPOOL_DIR = os.getenv("SPOOL_DIR", "./spool")
+SPOOL_DIR = os.getenv("SPOOL_DIR", os.path.join(BASE_DIR, "spool"))
 
 # Logging Settings
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.getenv("LOG_DIR", os.path.join(BASE_DIR, "logs"))
 LOG_FILE = os.getenv("LOG_FILE", os.path.join(LOG_DIR, "client.log"))

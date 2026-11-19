@@ -65,6 +65,9 @@ The server decouples edge payload reception from cloud warehouse writes:
 4. **Crash Recovery on Startup:** Whenever the server process boots, it scans the spool for pending records from prior runs and attempts an immediate flush before starting the background loop.
 5. **Retention Protection:** If the spool reaches `SPOOL_MAX_RECORDS` (default: 10000), the oldest records are trimmed to protect host storage and a warning is logged.
 
+> [!NOTE]
+> **Spool Directory Location:** By default, the local SQLite spool lives under `server/spool/` (`server_spool.db`), resolved relative to the server package directory (`BASE_DIR`). This guarantees the spool database is always created inside the server folder regardless of your process current working directory.
+
 ---
 
 ## Configuration Reference
@@ -76,7 +79,7 @@ The server decouples edge payload reception from cloud warehouse writes:
 | `DATABRICKS_HOST` | **Yes** | — | Databricks workspace host (e.g., `dbc-xxxx.cloud.databricks.com`) |
 | `DATABRICKS_HTTP_PATH` | **Yes** | — | SQL Warehouse HTTP path (`/sql/1.0/warehouses/xxxx`) |
 | `DATABRICKS_TOKEN` | **Yes** | — | Databricks Personal Access Token (`dapi...`) |
-| `SPOOL_DIR` | No | `./spool` | Directory path where `server_spool.db` is stored |
+| `SPOOL_DIR` | No | `server/spool` | Directory path where `server_spool.db` is stored (default: `server/spool` relative to server package) |
 | `FLUSH_INTERVAL_SECONDS` | No | `5.0` | Interval between Databricks flush attempts (seconds) |
 | `FLUSH_MAX_RECORDS` | No | `20` | Batch size threshold that triggers an immediate flush |
 | `SPOOL_MAX_RECORDS` | No | `10000` | Maximum durable spool capacity before trimming oldest records |

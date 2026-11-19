@@ -60,8 +60,10 @@ lerna-debug.log*
 htmlcov/
 .mypy_cache/
 
-# Local Client Spool
+# Durable Spool (Client, Server, and Root)
 spool/
+client/spool/
+server/spool/
 *.db
 *.db-wal
 *.db-shm

@@ -230,7 +230,7 @@ if ($WriteConfig) {
     $EnvContent += "FLUSH_INTERVAL_SECONDS=$FlushInterval"
     $EnvContent += "FLUSH_MAX_RECORDS=$FlushMax"
     $EnvContent += "SPOOL_MAX_RECORDS=$SpoolMax"
-    $EnvContent += "SPOOL_DIR=./spool"
+    $EnvContent += "# SPOOL_DIR=./spool  # Default: client/spool"
     $EnvContent += ""
     $EnvContent += "# File Logging Settings"
     $EnvContent += "LOG_DIR=./logs"
