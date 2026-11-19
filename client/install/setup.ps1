@@ -3,9 +3,11 @@
     Interactive Guided Setup Wizard for the EdgeShield PC Client Agent.
 
 .DESCRIPTION
-    Prompts the user for minimal configuration (Server IP, Port, Device ID, Room),
-    creates a local client/.env file, and optionally registers and starts the
-    Windows Scheduled Task auto-start service.
+    1. Locates system Python 3.11+.
+    2. Creates a dedicated virtual environment (.venv) if not already present.
+    3. Installs client dependencies from requirements.txt into the virtual environment.
+    4. Prompts for configuration (Server IP, Port, Device ID, Room) and generates client/.env.
+    5. Optionally registers the client as an auto-start Scheduled Task or launches it in the background.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\setup.ps1
@@ -25,51 +27,107 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host "    EdgeShield PC Client - Guided Setup Wizard   " -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "This wizard will configure your client agent settings (.env)"
-Write-Host "and optionally register auto-start on boot/logon."
+Write-Host "This wizard configures your client environment, installs dependencies"
+Write-Host "into a dedicated virtual environment (.venv), writes client/.env,"
+Write-Host "and optionally registers auto-start on boot/logon."
 Write-Host ""
 
-# 1. Resolve paths
+# 1. Resolve paths (self-contained within client folder; no repo root assumption)
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $ClientDir = (Resolve-Path (Join-Path $ScriptDir "..")).Path
-$RootDir = (Resolve-Path (Join-Path $ClientDir "..")).Path
 $ClientScript = Join-Path $ClientDir "client.py"
 $EnvFile = Join-Path $ClientDir ".env"
+$VenvDir = Join-Path $ClientDir ".venv"
+$ReqFile = Join-Path $ClientDir "requirements.txt"
 
 if (-not (Test-Path $ClientScript)) {
     Write-Error "Could not locate client.py at $ClientScript"
 }
 
-# 2. Detect Python interpreter
-$PythonCandidates = @(
-    (Join-Path $ClientDir ".venv\Scripts\python.exe"),
-    (Join-Path $ClientDir "venv\Scripts\python.exe"),
-    (Join-Path $RootDir ".venv\Scripts\python.exe"),
-    (Join-Path $RootDir "venv\Scripts\python.exe")
-)
+# 2. Find system Python 3.11+
+Write-Host "[*] Detecting system Python 3.11+..." -ForegroundColor Cyan
+$SystemPython = $null
+$PyCommands = @("py.exe", "python.exe", "python3.exe")
 
-$PythonExe = $null
-foreach ($Candidate in $PythonCandidates) {
-    if (Test-Path $Candidate) {
-        $PythonExe = $Candidate
-        break
+foreach ($cmdName in $PyCommands) {
+    $cmd = Get-Command $cmdName -ErrorAction SilentlyContinue
+    if ($cmd) {
+        $testCode = "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)"
+        & $cmd.Source -c $testCode 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $SystemPython = $cmd.Source
+            break
+        }
     }
 }
 
-if (-not $PythonExe) {
-    $Cmd = Get-Command python.exe -ErrorAction SilentlyContinue
-    if ($Cmd) {
-        $PythonExe = $Cmd.Source
-    } else {
-        Write-Error "python.exe was not found in PATH or virtual environments. Please install Python 3.11+."
+if (-not $SystemPython) {
+    # If standard PATH commands failed, test py launcher with specific 3.11/3.12 flags
+    $pyLauncher = Get-Command "py.exe" -ErrorAction SilentlyContinue
+    if ($pyLauncher) {
+        $pyArgs = @("-3.12", "-3.11", "-3")
+        foreach ($flag in $pyArgs) {
+            & $pyLauncher.Source $flag -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                $SystemPython = "$($pyLauncher.Source) $flag"
+                break
+            }
+        }
     }
 }
 
-Write-Host "[*] Client Directory : $ClientDir" -ForegroundColor Gray
-Write-Host "[*] Python Path      : $PythonExe" -ForegroundColor Gray
+if (-not $SystemPython) {
+    Write-Error "Python 3.11+ is required but was not found in PATH. Please install Python 3.11 or newer."
+}
+
+Write-Host "[+] Located Python interpreter: $SystemPython" -ForegroundColor Green
+Write-Host "[*] Client Directory          : $ClientDir" -ForegroundColor Gray
 Write-Host ""
 
-# 3. Check for existing .env
+# 3. Create client/.venv if it does not exist
+$VenvPython = Join-Path $VenvDir "Scripts\python.exe"
+if (-not (Test-Path $VenvPython)) {
+    Write-Host "[*] Creating dedicated virtual environment at $VenvDir..." -ForegroundColor Cyan
+    if ($SystemPython -match '^(.+\.exe)\s+(-\d.*)$') {
+        $baseExe = $Matches[1]
+        $extraArg = $Matches[2]
+        & $baseExe $extraArg -m venv $VenvDir
+    } else {
+        & $SystemPython -m venv $VenvDir
+    }
+
+    if (-not (Test-Path $VenvPython)) {
+        Write-Error "Failed to create virtual environment at $VenvDir"
+    }
+    Write-Host "[+] Virtual environment created successfully." -ForegroundColor Green
+} else {
+    Write-Host "[*] Using existing virtual environment at $VenvDir." -ForegroundColor Gray
+}
+
+# 4. Install dependencies into .venv
+if (Test-Path $ReqFile) {
+    Write-Host "[*] Installing client dependencies into .venv from requirements.txt..." -ForegroundColor Cyan
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $VenvPython -m pip install --upgrade pip 2>&1 | Out-Null
+        & $VenvPython -m pip install -r $ReqFile
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[+] Dependencies installed successfully." -ForegroundColor Green
+        } else {
+            Write-Warning "pip install exited with code $LASTEXITCODE. If offline or in a restricted network, install dependencies when connected via: & '$VenvPython' -m pip install -r '$ReqFile'"
+        }
+    } catch {
+        Write-Warning "Could not complete pip install: $($_.Exception.Message)"
+    } finally {
+        $ErrorActionPreference = $prevEAP
+    }
+} else {
+    Write-Warning "requirements.txt not found at $ReqFile. Skipping dependency installation."
+}
+Write-Host ""
+
+# 5. Check for existing .env configuration
 $WriteConfig = $true
 if (Test-Path $EnvFile) {
     Write-Host "[!] An existing configuration file was found at:" -ForegroundColor Yellow
@@ -90,7 +148,7 @@ if (Test-Path $EnvFile) {
     }
 }
 
-# 4. Interactive Prompts
+# 6. Interactive Configuration Prompts
 if ($WriteConfig) {
     # Prompt: SERVER_IP (Required)
     if (-not $ServerIp) {
@@ -183,7 +241,7 @@ if ($WriteConfig) {
     Write-Host ""
 }
 
-# 5. Prompt: Auto-start on boot / logon
+# 7. Prompt: Auto-start on boot / logon
 $BootEnabled = $false
 if (-not $NonInteractive) {
     $EnableBoot = Read-Host "Enable automatic start on boot/logon (Scheduled Task)? (Y/n)"
@@ -192,11 +250,11 @@ if (-not $NonInteractive) {
         & "$ScriptDir\install_windows.ps1"
         $BootEnabled = $true
     } else {
-        # 6. Prompt: Start client now (if auto-start was skipped)
+        # 8. Prompt: Start client now (if auto-start was skipped)
         $StartNow = Read-Host "Start the client agent now in the background? (Y/n)"
         if ($StartNow -notmatch '^[Nn]$') {
-            Write-Host "[*] Launching client agent in background..." -ForegroundColor Cyan
-            Start-Process -FilePath $PythonExe -ArgumentList "`"$ClientScript`"" -WorkingDirectory $ClientDir -WindowStyle Hidden
+            Write-Host "[*] Launching client agent in background using .venv Python..." -ForegroundColor Cyan
+            Start-Process -FilePath $VenvPython -ArgumentList "`"$ClientScript`"" -WorkingDirectory $ClientDir -WindowStyle Hidden
             Write-Host "[+] Client agent started in background." -ForegroundColor Green
         }
     }
@@ -208,6 +266,8 @@ Write-Host ""
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "         EdgeShield Client Setup Complete!        " -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
+Write-Host "[*] Virtual environment: $VenvDir" -ForegroundColor Gray
+Write-Host "[*] Python executable  : $VenvPython" -ForegroundColor Gray
 Write-Host "[*] Configuration file : $EnvFile" -ForegroundColor Gray
 Write-Host "[*] Log output file    : $LogFile" -ForegroundColor Gray
 Write-Host "[*] Live log streaming : Get-Content -Wait -Tail 30 '$LogFile'" -ForegroundColor Yellow
@@ -215,7 +275,7 @@ if ($BootEnabled) {
     Write-Host "[*] Task query command : Get-ScheduledTask -TaskName 'EdgeShieldClient'" -ForegroundColor Gray
     Write-Host "[*] Uninstall task     : powershell -ExecutionPolicy Bypass -File '$ScriptDir\uninstall_windows.ps1'" -ForegroundColor Gray
 } else {
-    Write-Host "[*] Manual run command : python client.py" -ForegroundColor Gray
+    Write-Host "[*] Manual run command : & '$VenvPython' client.py" -ForegroundColor Gray
     Write-Host "[*] Enable task later  : powershell -ExecutionPolicy Bypass -File '$ScriptDir\install_windows.ps1'" -ForegroundColor Gray
 }
 Write-Host "==================================================" -ForegroundColor Cyan

@@ -29,10 +29,9 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host " EdgeShield PC Client - Windows Task Installer" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 
-# 1. Resolve paths
+# 1. Resolve paths (self-contained within client folder)
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $ClientDir = (Resolve-Path (Join-Path $ScriptDir "..")).Path
-$RootDir = (Resolve-Path (Join-Path $ClientDir "..")).Path
 $ClientScript = Join-Path $ClientDir "client.py"
 
 if (-not (Test-Path $ClientScript)) {
@@ -51,12 +50,10 @@ if (-not (Test-Path $EnvFile)) {
     }
 }
 
-# 3. Detect Python interpreter (prefer virtual environments if present)
+# 3. Detect Python interpreter (prefer dedicated client/.venv)
 $PythonCandidates = @(
     (Join-Path $ClientDir ".venv\Scripts\python.exe"),
-    (Join-Path $ClientDir "venv\Scripts\python.exe"),
-    (Join-Path $RootDir ".venv\Scripts\python.exe"),
-    (Join-Path $RootDir "venv\Scripts\python.exe")
+    (Join-Path $ClientDir "venv\Scripts\python.exe")
 )
 
 $PythonExe = $null
@@ -72,7 +69,7 @@ if (-not $PythonExe) {
     if ($Cmd) {
         $PythonExe = $Cmd.Source
     } else {
-        Write-Error "python.exe was not found in PATH or virtual environments. Please install Python 3.11+."
+        Write-Error "Python executable was not found in client/.venv or PATH. Please run setup.ps1 first."
     }
 }
 

@@ -1,21 +1,17 @@
-# --- Client Telemetry Agent ---
-psutil>=5.9.0
-requests>=2.31.0
-
-# --- Central Ingestion Server ---
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-pydantic>=2.6.0
-pandas>=2.2.0
-python-dotenv>=1.0.0         # Required for loading .env variables (Databricks tokens, hosts)
-watchfiles>=0.21.0           # Enables auto-reloading during server development
-
-# --- Database & Storage ---
-databricks-sql-connector[pyarrow]>=3.0.0
-databricks-sdk>=0.18.0       # Databricks SDK for programmatic workspace & DLT management
-pyarrow>=15.0.0
-
-# --- PySpark & Unit Testing Infrastructure ---
-pyspark>=3.5.0               # Required for running local unit tests in tests/
-pytest>=8.0.0                # Test runner
-pytest-mock>=3.12.0          # Mocking Spark sessions and external API calls
+# EdgeShield Requirements Pointer
+#
+# EdgeShield dependencies are split by component to keep deployments lightweight:
+#
+# 1. PC Client Telemetry Agent:
+#    pip install -r client/requirements.txt
+#
+# 2. Central Ingestion Server:
+#    pip install -r server/requirements.txt
+#
+# 3. Web Dashboard API Backend:
+#    pip install -r web/backend/requirements.txt
+#
+# 4. Local Unit Testing & Spark Development:
+#    pip install pytest>=8.0.0 pytest-mock>=3.12.0 pyspark>=3.5.0
+#
+# Refer to the component README files for setup and execution instructions.

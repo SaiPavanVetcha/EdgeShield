@@ -124,7 +124,7 @@ EdgeShield/
 │   ├── presentation/            # Interactive 7-slide React presentation app
 │   ├── EdgeShield_Project_Report.pdf # Formal engineering report
 │   └── README.md                # Documentation guide
-├── requirements.txt             # Root Python dependencies (client, server, ETL tests)
+├── requirements.txt             # Root Python dependencies pointer (client, server, web)
 ├── LICENSE                      # MIT License
 └── README.md                    # Root project documentation (this file)
 ```
@@ -144,8 +144,8 @@ cd server
 cp .env.example .env
 # Edit .env with your Databricks workspace credentials
 
-# Install root dependencies (if not already installed)
-pip install -r ../requirements.txt
+# Install server dependencies
+pip install -r requirements.txt
 
 # Run the ingestion server (default port: 5000)
 python server.py

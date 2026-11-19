@@ -11,16 +11,16 @@ The Central Ingestion Server receives real-time telemetry payloads over HTTP fro
 
 * **Python:** 3.11+ (standard library SQLite3 used for spooling)
 * **Databricks:** Active SQL Warehouse (Free Tier Serverless, Pro, or Classic) with `edgeshield_db` schema
-* **Dependencies:** `fastapi`, `uvicorn`, `databricks-sql-connector`, `pydantic`, `python-dotenv` (included in root [`requirements.txt`](../requirements.txt))
+* **Dependencies:** `fastapi`, `uvicorn`, `databricks-sql-connector`, `pydantic`, `python-dotenv` (specified in [`requirements.txt`](requirements.txt))
 
 ---
 
 ## Setup & Execution
 
 1. **Install dependencies:**
-   From the repository root (or inside your virtual environment):
+   From the `server` directory (inside your virtual environment):
    ```bash
-   pip install -r ../requirements.txt
+   pip install -r requirements.txt
    ```
 
 2. **Configure environment variables:**

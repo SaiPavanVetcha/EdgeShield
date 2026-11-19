@@ -6,27 +6,28 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLIENT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-ROOT_DIR="$(cd "$CLIENT_DIR/.." && pwd)"
 TEMPLATE_FILE="$SCRIPT_DIR/edgeshield-client.service"
 
 echo "=================================================="
 echo " EdgeShield PC Client - Linux Service Installer"
 echo "=================================================="
 
-# 1. Resolve Python executable
+# 1. Resolve Python executable (prioritize dedicated .venv)
 PYTHON_PATH=""
 if [ -x "$CLIENT_DIR/.venv/bin/python3" ]; then
     PYTHON_PATH="$CLIENT_DIR/.venv/bin/python3"
+elif [ -x "$CLIENT_DIR/.venv/bin/python" ]; then
+    PYTHON_PATH="$CLIENT_DIR/.venv/bin/python"
 elif [ -x "$CLIENT_DIR/venv/bin/python3" ]; then
     PYTHON_PATH="$CLIENT_DIR/venv/bin/python3"
-elif [ -x "$ROOT_DIR/.venv/bin/python3" ]; then
-    PYTHON_PATH="$ROOT_DIR/.venv/bin/python3"
-elif [ -x "$ROOT_DIR/venv/bin/python3" ]; then
-    PYTHON_PATH="$ROOT_DIR/venv/bin/python3"
+elif [ -x "$CLIENT_DIR/venv/bin/python" ]; then
+    PYTHON_PATH="$CLIENT_DIR/venv/bin/python"
 elif command -v python3 &>/dev/null; then
     PYTHON_PATH="$(command -v python3)"
+elif command -v python &>/dev/null; then
+    PYTHON_PATH="$(command -v python)"
 else
-    echo "[!] Error: python3 could not be found. Please install Python 3.11+." >&2
+    echo "[!] Error: No Python executable found. Please run setup.sh first." >&2
     exit 1
 fi
 
@@ -83,7 +84,7 @@ $SYSTEMCTL_CMD daemon-reload
 echo "[*] Enabling and starting edgeshield-client.service..."
 $SYSTEMCTL_CMD enable --now edgeshield-client.service
 
-# 6. Enable lingering if user service so it persists without active login session
+# 6. Enable lingering if user service so it persists across logouts and reboots
 if [ "$USE_SYSTEM" = false ]; then
     if command -v loginctl &>/dev/null; then
         echo "[*] Enabling linger for $USER (ensures service runs across system reboots)..."

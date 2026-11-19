@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory={{CLIENT_DIR}}
 EnvironmentFile=-{{CLIENT_DIR}}/.env
+# ExecStart uses the dedicated client/.venv Python when generated via install_linux.sh / setup.sh
 ExecStart={{PYTHON_PATH}} {{CLIENT_DIR}}/client.py
 Restart=always
 RestartSec=10

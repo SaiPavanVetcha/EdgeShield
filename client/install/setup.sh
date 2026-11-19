@@ -6,35 +6,82 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLIENT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-ROOT_DIR="$(cd "$CLIENT_DIR/.." && pwd)"
 ENV_FILE="$CLIENT_DIR/.env"
+VENV_DIR="$CLIENT_DIR/.venv"
+REQ_FILE="$CLIENT_DIR/requirements.txt"
 
 echo "=================================================="
 echo "    EdgeShield PC Client - Guided Setup Wizard   "
 echo "=================================================="
 echo ""
-echo "This wizard will configure your client agent settings (.env)"
-echo "and optionally register auto-start on boot."
+echo "This wizard configures your client environment, installs dependencies"
+echo "into a dedicated virtual environment (.venv), writes client/.env,"
+echo "and optionally registers the auto-start service."
 echo ""
 
-# 1. Resolve Python executable
-PYTHON_PATH=""
-if [ -x "$CLIENT_DIR/.venv/bin/python3" ]; then
-    PYTHON_PATH="$CLIENT_DIR/.venv/bin/python3"
-elif [ -x "$CLIENT_DIR/venv/bin/python3" ]; then
-    PYTHON_PATH="$CLIENT_DIR/venv/bin/python3"
-elif [ -x "$ROOT_DIR/.venv/bin/python3" ]; then
-    PYTHON_PATH="$ROOT_DIR/.venv/bin/python3"
-elif [ -x "$ROOT_DIR/venv/bin/python3" ]; then
-    PYTHON_PATH="$ROOT_DIR/venv/bin/python3"
-elif command -v python3 &>/dev/null; then
-    PYTHON_PATH="$(command -v python3)"
-else
-    echo "[!] Error: python3 could not be found. Please install Python 3.11+." >&2
+# 1. Resolve System Python (Python 3.11+ required)
+echo "[*] Detecting system Python 3.11+..."
+SYSTEM_PYTHON=""
+for py_cmd in python3.13 python3.12 python3.11 python3 python; do
+    if command -v "$py_cmd" &>/dev/null; then
+        if "$py_cmd" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
+            SYSTEM_PYTHON="$(command -v "$py_cmd")"
+            break
+        fi
+    fi
+done
+
+if [ -z "$SYSTEM_PYTHON" ]; then
+    echo "[!] Error: Python 3.11+ is required but was not found in PATH." >&2
+    echo "    Please install Python 3.11 or newer and re-run this setup wizard." >&2
     exit 1
 fi
 
-# 2. Check for existing .env
+PY_VERSION="$("$SYSTEM_PYTHON" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')")"
+echo "[+] Located Python interpreter: $SYSTEM_PYTHON (v$PY_VERSION)"
+echo "[*] Client Directory          : $CLIENT_DIR"
+echo ""
+
+# 2. Create client/.venv if it does not exist
+if [ ! -d "$VENV_DIR" ]; then
+    echo "[*] Creating dedicated virtual environment at $VENV_DIR..."
+    "$SYSTEM_PYTHON" -m venv "$VENV_DIR"
+    echo "[+] Virtual environment created successfully."
+else
+    echo "[*] Using existing virtual environment at $VENV_DIR."
+fi
+
+# Locate python and pip inside .venv
+VENV_PYTHON=""
+if [ -x "$VENV_DIR/bin/python3" ]; then
+    VENV_PYTHON="$VENV_DIR/bin/python3"
+elif [ -x "$VENV_DIR/bin/python" ]; then
+    VENV_PYTHON="$VENV_DIR/bin/python"
+elif [ -x "$VENV_DIR/Scripts/python.exe" ]; then
+    VENV_PYTHON="$VENV_DIR/Scripts/python.exe"
+else
+    VENV_PYTHON="$VENV_DIR/bin/python"
+fi
+
+# 3. Install client dependencies into .venv
+if [ -f "$REQ_FILE" ]; then
+    echo "[*] Installing client dependencies into .venv from requirements.txt..."
+    set +e
+    "$VENV_PYTHON" -m pip install --quiet --upgrade pip 2>/dev/null
+    "$VENV_PYTHON" -m pip install -r "$REQ_FILE"
+    PIP_STATUS=$?
+    set -e
+    if [ $PIP_STATUS -eq 0 ]; then
+        echo "[+] Dependencies installed successfully."
+    else
+        echo "[!] Warning: pip install exited with code $PIP_STATUS. If offline or in a restricted network, install dependencies when connected via: $VENV_PYTHON -m pip install -r $REQ_FILE"
+    fi
+else
+    echo "[!] Warning: $REQ_FILE not found. Skipping dependency installation."
+fi
+echo ""
+
+# 4. Check for existing .env configuration
 WRITE_CONFIG=true
 if [ -f "$ENV_FILE" ]; then
     echo "[!] An existing configuration file was found at:"
@@ -51,7 +98,7 @@ if [ -f "$ENV_FILE" ]; then
     echo ""
 fi
 
-# 3. Interactive Prompts
+# 5. Interactive Configuration Prompts
 if [ "$WRITE_CONFIG" = true ]; then
     # Prompt: SERVER_IP (Required)
     SERVER_IP=""
@@ -140,7 +187,7 @@ EOF
     echo ""
 fi
 
-# 4. Prompt: Auto-start on boot
+# 6. Prompt: Auto-start on boot
 read -r -p "Enable automatic start on boot (systemd service)? [Y/n]: " ENABLE_BOOT
 ENABLE_BOOT="$(echo "$ENABLE_BOOT" | xargs)"
 ENABLE_BOOT="${ENABLE_BOOT:-Y}"
@@ -151,25 +198,27 @@ if [[ "$ENABLE_BOOT" =~ ^[Yy]$ ]]; then
     bash "$SCRIPT_DIR/install_linux.sh"
     BOOT_ENABLED=true
 else
-    # 5. Prompt: Start client now (if auto-start wasn't already started)
+    # 7. Prompt: Start client now (if auto-start was skipped)
     read -r -p "Start the client agent now in the background? [Y/n]: " START_NOW
     START_NOW="$(echo "$START_NOW" | xargs)"
     START_NOW="${START_NOW:-Y}"
 
     if [[ "$START_NOW" =~ ^[Yy]$ ]]; then
-        echo "[*] Starting client agent in background..."
+        echo "[*] Starting client agent in background using .venv Python..."
         cd "$CLIENT_DIR"
-        nohup "$PYTHON_PATH" "$CLIENT_DIR/client.py" >/dev/null 2>&1 &
+        nohup "$VENV_PYTHON" "$CLIENT_DIR/client.py" >/dev/null 2>&1 &
         CLIENT_PID=$!
         echo "[+] Client agent started successfully (PID: $CLIENT_PID)."
     fi
 fi
 
-# 6. Summary and next steps
+# 8. Summary and next steps
 echo ""
 echo "=================================================="
 echo "         EdgeShield Client Setup Complete!        "
 echo "=================================================="
+echo "[*] Virtual environment: $VENV_DIR"
+echo "[*] Python executable  : $VENV_PYTHON"
 echo "[*] Configuration file : $ENV_FILE"
 echo "[*] Log output file    : $CLIENT_DIR/logs/client.log"
 echo "[*] Live log streaming : tail -f $CLIENT_DIR/logs/client.log"
@@ -177,7 +226,7 @@ if [ "$BOOT_ENABLED" = true ]; then
     echo "[*] Service status     : systemctl --user status edgeshield-client.service"
     echo "[*] Uninstall service  : bash $SCRIPT_DIR/uninstall_linux.sh"
 else
-    echo "[*] Manual run command : cd $CLIENT_DIR && python3 client.py"
+    echo "[*] Manual run command : $VENV_PYTHON $CLIENT_DIR/client.py"
     echo "[*] Enable boot later  : bash $SCRIPT_DIR/install_linux.sh"
 fi
 echo "=================================================="

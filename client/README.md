@@ -11,13 +11,20 @@ The PC Client Agent runs on host workstations, laptops, or embedded Linux comput
 
 * **Python:** 3.11+ (standard library SQLite3 used for spooling)
 * **Operating Systems:** Windows 10/11, Linux (Ubuntu, Debian, Fedora, Arch, Raspberry Pi OS), and macOS
-* **Dependencies:** `psutil>=5.9.0`, `requests>=2.31.0`, `python-dotenv>=1.0.0` (included in root [`requirements.txt`](../requirements.txt))
+* **Dependencies:** `psutil>=5.9.0`, `requests>=2.31.0`, `python-dotenv>=1.0.0` (specified in [`requirements.txt`](requirements.txt))
 
 ---
 
 ## Quick Install (Recommended)
 
-Run the interactive guided setup wizard. The script prompts for your Central Server IP, port, device ID, and optional room tag, generates `client/.env` automatically, and optionally registers the client to start automatically on system boot:
+Run the interactive guided setup wizard. The script automatically creates an isolated virtual environment (`.venv`), installs client dependencies, prompts for server configuration, and optionally configures auto-start on boot:
+
+1. **Detects Python 3.11+** installed on the host system.
+2. **Creates a local virtual environment** (`client/.venv`) if not already present.
+3. **Installs client dependencies** (`pip install -r requirements.txt`) directly into `.venv`.
+4. **Interactive configuration:** Prompts for Central Server IP, port, device identifier, and optional room tag, then generates `client/.env` (backing up any prior configuration).
+5. **Auto-Start Registration (Optional):** Registers systemd user service (Linux) or Windows Scheduled Task using the `.venv` Python interpreter.
+6. **Immediate Background Launch (Optional):** Launches the client agent immediately in the background using the `.venv` environment.
 
 * **Linux / macOS:**
   ```bash
@@ -36,15 +43,54 @@ Run the interactive guided setup wizard. The script prompts for your Central Ser
 
 ---
 
+## Standalone Client-Only Deployment
+
+The PC client is completely decoupled from the central server, Databricks pipelines, and web frontend. Target endpoints only require a Python 3.11+ runtime and the `client/` folder:
+
+```text
+client/
+├── client.py                 # Telemetry collection, spooling, and flush loop
+├── config.py                 # Environment variables loader
+├── spool.py                  # Durable SQLite offline queue
+├── requirements.txt          # Client-only dependencies (psutil, requests, python-dotenv)
+├── .env.example              # Configuration template
+├── README.md                 # Client documentation
+└── install/
+    ├── setup.sh              # Linux/macOS guided interactive installer
+    ├── setup.ps1             # Windows guided interactive installer
+    ├── install_linux.sh      # systemd service installer
+    ├── uninstall_linux.sh    # systemd service uninstaller
+    ├── install_windows.ps1   # Scheduled Task installer
+    ├── uninstall_windows.ps1 # Scheduled Task uninstaller
+    └── edgeshield-client.service # systemd unit template
+```
+
+You can zip and distribute the `client/` directory onto remote lab or fleet PCs. The setup scripts do not depend on any files outside the client directory.
+
+---
+
 ## Advanced / Manual Setup & Execution
 
-1. **Install dependencies:**
-   From the repository root (or inside your virtual environment):
+If you prefer to configure the virtual environment and service manually:
+
+1. **Create and activate a virtual environment:**
+   * Linux / macOS:
+     ```bash
+     python3 -m venv .venv
+     source .venv/bin/activate
+     ```
+   * Windows:
+     ```powershell
+     python -m venv .venv
+     .\.venv\Scripts\Activate.ps1
+     ```
+
+2. **Install client dependencies:**
    ```bash
-   pip install -r ../requirements.txt
+   pip install -r requirements.txt
    ```
 
-2. **Configure environment variables manually:**
+3. **Configure environment variables manually:**
    Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
@@ -66,7 +112,7 @@ Run the interactive guided setup wizard. The script prompts for your Central Ser
    SPOOL_DIR=./spool
    ```
 
-3. **Run the agent:**
+4. **Run the agent:**
    ```bash
    python client.py
    ```
