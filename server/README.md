@@ -128,14 +128,23 @@ The server decouples edge payload reception from cloud warehouse writes:
 
 ---
 
-## Schema & Lakehouse Migration Note (DDL Gap)
+## Schema & Lakehouse Migration (Room Metadata Support)
 
-The ingestion server accepts payloads with or without the optional `room` field (backward-compatible). Currently, the `edgeshield_db.system_metrics` landing table schema defines:
+The ingestion server and Lakehouse pipeline support end-to-end telemetry location tracking via the `room` column:
+* **Payload Reception:** The ingestion server receives client JSON payloads containing top-level `"room"` (e.g. `"Lab-A"`). Empty or whitespace-only strings are automatically normalized to `NULL`.
+* **Database Ingestion:** The background flush worker writes `room` into `edgeshield_db.system_metrics`. If targeting an unmigrated table where the column is missing, it automatically falls back to omitting `room` to prevent batch failure.
+* **Lakehouse Pipeline:** Bronze streams `room` into Silver (`cleaned_system_metrics`), and Gold computes the latest non-null room per device in `dim_device`.
+
+### Applying DDL Migration to Existing Databricks Environments
+
+If your Databricks workspace was initialized with an earlier schema version, apply these DDL migration statements to add the nullable `room STRING` column:
+
 ```sql
-(event_id STRING, device_id STRING, hostname STRING, timestamp TIMESTAMP, platform STRING, boot_time_utc TIMESTAMP)
+-- 1. Ingestion landing table (edgeshield_db)
+ALTER TABLE edgeshield_db.system_metrics ADD COLUMN IF NOT EXISTS room STRING;
+
+-- 2. Bronze lakehouse table (edgeshield_lakehouse)
+ALTER TABLE edgeshield_lakehouse.bronze.system_metrics ADD COLUMN IF NOT EXISTS room STRING;
 ```
-To persist `room` into Databricks when available, apply the following DDL migration to your Lakehouse:
-```sql
-ALTER TABLE edgeshield_db.system_metrics ADD COLUMN room STRING;
-```
-Until this migration is applied, the ingestion server safely buffers and processes incoming telemetry while preserving the existing database write contract.
+
+Fresh Lakehouse deployments using `edgeshield_etl_pipeline/ddl/ddl_edgeshield_db.ipynb` and `ddl_edgeshield_lakehouse.ipynb` already include `room STRING` in `system_metrics`.

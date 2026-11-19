@@ -1,5 +1,5 @@
 from pyspark import pipelines as dp
-from pyspark.sql.functions import col, current_timestamp
+from pyspark.sql.functions import col, current_timestamp, lit, trim, when
 
 TARGET_CATALOG = spark.conf.get("edgeshield.target_catalog", "edgeshield_lakehouse")
 BRONZE_SCHEMA = spark.conf.get("edgeshield.bronze_schema", "bronze")
@@ -51,10 +51,15 @@ dp.create_streaming_table(
 @dp.expect_or_drop("valid_device", "device_id IS NOT NULL")
 @dp.expect_or_drop("valid_hostname", "hostname IS NOT NULL")
 def system_metrics_silver_cleaned():
-    return (
-        dp.read_stream(f"{TARGET_CATALOG}.{BRONZE_SCHEMA}.system_metrics")
-        .withColumn("_processed_at", current_timestamp())
-    )
+    raw_df = dp.read_stream(f"{TARGET_CATALOG}.{BRONZE_SCHEMA}.system_metrics")
+    if "room" in raw_df.columns:
+        cleaned_df = raw_df.withColumn(
+            "room",
+            when(trim(col("room")) == "", None).otherwise(trim(col("room")))
+        )
+    else:
+        cleaned_df = raw_df.withColumn("room", lit(None).cast("string"))
+    return cleaned_df.withColumn("_processed_at", current_timestamp())
 
 dp.apply_changes(
     target=f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_system_metrics",

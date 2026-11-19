@@ -43,7 +43,9 @@ def insert_single_payload(cursor, payload: Dict[str, Any]) -> None:
     event_id = str(uuid.uuid4())
     device_id = payload.get("device_id")
     hostname = payload.get("hostname")
-    room = payload.get("room")  # Optional location metadata (documented DDL gap for schema migration)
+    raw_room = payload.get("room")
+    # Normalize empty or whitespace-only room to None (SQL NULL)
+    room = str(raw_room).strip() if (raw_room is not None and str(raw_room).strip() != "") else None
     timestamp = datetime.now(timezone.utc).isoformat()
 
     metrics = payload.get("metrics", {}) or {}
@@ -57,21 +59,44 @@ def insert_single_payload(cursor, payload: Dict[str, Any]) -> None:
 
     # 1. System metrics
     if system:
-        cursor.execute(
-            """
-            INSERT INTO edgeshield_db.system_metrics 
-            (event_id, device_id, hostname, timestamp, platform, boot_time_utc)
-            VALUES (?, ?, ?, CAST(? AS TIMESTAMP), ?, CAST(? AS TIMESTAMP))
-            """,
-            (
-                event_id,
-                device_id,
-                hostname,
-                timestamp,
-                system.get("platform"),
-                system.get("boot_time_utc"),
-            ),
-        )
+        try:
+            cursor.execute(
+                """
+                INSERT INTO edgeshield_db.system_metrics 
+                (event_id, device_id, hostname, room, timestamp, platform, boot_time_utc)
+                VALUES (?, ?, ?, ?, CAST(? AS TIMESTAMP), ?, CAST(? AS TIMESTAMP))
+                """,
+                (
+                    event_id,
+                    device_id,
+                    hostname,
+                    room,
+                    timestamp,
+                    system.get("platform"),
+                    system.get("boot_time_utc"),
+                ),
+            )
+        except Exception as e:
+            # Fallback for environments where the 'room' column migration has not been applied yet
+            err_msg = str(e).lower()
+            if "room" in err_msg or "column" in err_msg or "cannot be resolved" in err_msg:
+                cursor.execute(
+                    """
+                    INSERT INTO edgeshield_db.system_metrics 
+                    (event_id, device_id, hostname, timestamp, platform, boot_time_utc)
+                    VALUES (?, ?, ?, CAST(? AS TIMESTAMP), ?, CAST(? AS TIMESTAMP))
+                    """,
+                    (
+                        event_id,
+                        device_id,
+                        hostname,
+                        timestamp,
+                        system.get("platform"),
+                        system.get("boot_time_utc"),
+                    ),
+                )
+            else:
+                raise
 
     # 2. CPU metrics
     if cpu:

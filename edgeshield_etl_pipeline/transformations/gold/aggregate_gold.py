@@ -1,5 +1,6 @@
 from pyspark import pipelines as dp
-from pyspark.sql.functions import col, current_timestamp, date_format, md5, concat_ws
+from pyspark.sql.functions import col, current_timestamp, date_format, md5, concat_ws, row_number, trim, lit
+from pyspark.sql.window import Window
 
 TARGET_CATALOG = spark.conf.get("edgeshield.target_catalog", "edgeshield_lakehouse")
 SILVER_SCHEMA = spark.conf.get("edgeshield.silver_schema", "silver")
@@ -21,16 +22,37 @@ def dim_device():
     sys_df = dp.read(f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_system_metrics")
     cpu_df = dp.read(f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_cpu_metrics")
 
-    sys_unique = sys_df.select("device_id", "hostname", "platform", "boot_time_utc").dropDuplicates(["device_id"])
+    # Latest system hardware metadata per device
+    sys_window = Window.partitionBy("device_id").orderBy(col("timestamp").desc())
+    sys_latest = (
+        sys_df.withColumn("rn", row_number().over(sys_window))
+        .filter(col("rn") == 1)
+        .select("device_id", "hostname", "platform", "boot_time_utc")
+    )
+
+    # Latest non-null room per device_id
+    if "room" in sys_df.columns:
+        room_window = Window.partitionBy("device_id").orderBy(col("timestamp").desc())
+        room_latest = (
+            sys_df.filter(col("room").isNotNull() & (trim(col("room")) != ""))
+            .withColumn("rn", row_number().over(room_window))
+            .filter(col("rn") == 1)
+            .select("device_id", trim(col("room")).alias("room"))
+        )
+        sys_with_room = sys_latest.join(room_latest, "device_id", "left")
+    else:
+        sys_with_room = sys_latest.withColumn("room", lit(None).cast("string"))
+
     cpu_specs = cpu_df.select("device_id", "logical_cores", "physical_cores").dropDuplicates(["device_id"])
 
     return (
-        sys_unique.alias("sys")
+        sys_with_room.alias("sys")
         .join(cpu_specs.alias("cpu"), "device_id", "left")
         .select(
             md5(col("sys.device_id")).alias("device_key"),
             col("sys.device_id"),
             col("sys.hostname"),
+            col("sys.room"),
             col("sys.platform"),
             col("cpu.logical_cores"),
             col("cpu.physical_cores"),
