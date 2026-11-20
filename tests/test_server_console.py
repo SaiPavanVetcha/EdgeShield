@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+import logging
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 
@@ -10,7 +11,16 @@ if SERVER_DIR not in sys.path:
     sys.path.insert(0, SERVER_DIR)
 
 import device_registry
-from routes.console_api import get_console_devices, get_console_status
+import runtime_config
+import log_buffer
+from routes.console_api import (
+    StorageModeRequest,
+    get_console_devices,
+    get_console_logs,
+    get_console_status,
+    manual_flush,
+    update_storage_mode,
+)
 from routes.metrics import receive_metrics
 import server
 from fastapi import HTTPException
@@ -100,9 +110,77 @@ class TestDeviceRegistry(unittest.TestCase):
         self.assertFalse(devs[0]["is_online"])
 
 
+class TestRuntimeConfig(unittest.TestCase):
+    def setUp(self):
+        # Clean up any test runtime_config.json
+        if os.path.exists(runtime_config.RUNTIME_CONFIG_PATH):
+            os.remove(runtime_config.RUNTIME_CONFIG_PATH)
+
+    def tearDown(self):
+        if os.path.exists(runtime_config.RUNTIME_CONFIG_PATH):
+            os.remove(runtime_config.RUNTIME_CONFIG_PATH)
+
+    def test_resolution_order_and_persistence(self):
+        # 1. Default when no file and no env
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(runtime_config.get_storage_mode(), "databricks")
+
+        # 2. Env variable precedence over default
+        with patch.dict(os.environ, {"STORAGE_MODE": "local"}):
+            self.assertEqual(runtime_config.get_storage_mode(), "local")
+
+        # 3. File precedence over env
+        runtime_config.set_storage_mode("databricks")
+        with patch.dict(os.environ, {"STORAGE_MODE": "local"}):
+            self.assertEqual(runtime_config.get_storage_mode(), "databricks")
+
+        # 4. Persistence to file and reload
+        runtime_config.set_storage_mode("local")
+        self.assertEqual(runtime_config.get_storage_mode(), "local")
+
+    def test_invalid_mode_rejected(self):
+        with self.assertRaises(ValueError):
+            runtime_config.set_storage_mode("invalid_mode")
+
+    def test_is_databricks_configured(self):
+        with patch.object(runtime_config, "DATABRICKS_HOST", "dbc-test.cloud"), \
+             patch.object(runtime_config, "DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/123"), \
+             patch.object(runtime_config, "DATABRICKS_TOKEN", "dapi-token"):
+            self.assertTrue(runtime_config.is_databricks_configured())
+
+        with patch.object(runtime_config, "DATABRICKS_HOST", ""):
+            self.assertFalse(runtime_config.is_databricks_configured())
+
+
+class TestLogBuffer(unittest.TestCase):
+    def setUp(self):
+        log_buffer.clear_log_buffer()
+        log_buffer.attach_log_buffer()
+
+    def test_log_capture(self):
+        test_logger = logging.getLogger("test_console_logger")
+        test_logger.setLevel(logging.INFO)
+        test_logger.info("Test message for console buffer")
+        test_logger.warning("Test warning for console buffer")
+
+        logs = log_buffer.get_recent_logs(limit=10)
+        self.assertGreaterEqual(len(logs), 2)
+        messages = [l["message"] for l in logs]
+        self.assertIn("Test message for console buffer", messages)
+        self.assertIn("Test warning for console buffer", messages)
+
+
 class TestServerConsoleEndpoints(unittest.TestCase):
     def setUp(self):
         device_registry.clear_registry()
+        log_buffer.clear_log_buffer()
+        log_buffer.attach_log_buffer()
+        if os.path.exists(runtime_config.RUNTIME_CONFIG_PATH):
+            os.remove(runtime_config.RUNTIME_CONFIG_PATH)
+
+    def tearDown(self):
+        if os.path.exists(runtime_config.RUNTIME_CONFIG_PATH):
+            os.remove(runtime_config.RUNTIME_CONFIG_PATH)
 
     @patch("routes.metrics.enqueue")
     def test_metrics_route_updates_registry(self, mock_enqueue):
@@ -125,7 +203,6 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         self.assertEqual(resp["room"], "Control-Room")
         self.assertTrue(mock_enqueue.called)
 
-        # Verify registry updated
         dev = device_registry.get_device("dev-test-1")
         self.assertIsNotNone(dev)
         self.assertEqual(dev["hostname"], "agent-host")
@@ -147,11 +224,11 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         self.assertIn("port", data)
         self.assertIn("uptime_seconds", data)
         self.assertIn("storage_mode", data)
+        self.assertIn("databricks_configured", data)
+        self.assertIn("pending", data)
+        self.assertIn("last_flush", data)
         self.assertIn("spool", data)
         self.assertIn("devices", data)
-        self.assertIn("pending", data["spool"])
-        self.assertIn("total", data["devices"])
-        self.assertIn("online", data["devices"])
 
     def test_console_devices_endpoint(self):
         payload = {
@@ -167,9 +244,55 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         self.assertEqual(len(data["devices"]), 1)
         self.assertEqual(data["devices"][0]["device_id"], "dev-007")
 
+    def test_storage_mode_endpoint(self):
+        # Switch to local
+        res = update_storage_mode(StorageModeRequest(mode="local"))
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["storage_mode"], "local")
+        self.assertEqual(runtime_config.get_storage_mode(), "local")
+
+        # Switch to databricks
+        res = update_storage_mode(StorageModeRequest(mode="databricks"))
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["storage_mode"], "databricks")
+        self.assertEqual(runtime_config.get_storage_mode(), "databricks")
+
+        # Invalid mode
+        with self.assertRaises(HTTPException) as ctx:
+            update_storage_mode(StorageModeRequest(mode="unsupported"))
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    @patch("routes.console_api.trigger_flush")
+    def test_flush_endpoint(self, mock_trigger):
+        mock_trigger.return_value = {
+            "status": "success",
+            "mode": "local",
+            "inserted": 0,
+            "failed": 0,
+            "pending": 5,
+            "message": "Storage mode is local; spool records retained durably on disk.",
+            "last_flush": {"success": True},
+        }
+        res = manual_flush()
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["mode"], "local")
+        self.assertEqual(res["pending"], 5)
+        self.assertTrue(mock_trigger.called)
+
+    def test_logs_endpoint(self):
+        logger = logging.getLogger("test_logs_api")
+        logger.setLevel(logging.INFO)
+        logger.info("Sample log entry for API test")
+
+        res = get_console_logs(limit=50)
+        self.assertIn("logs", res)
+        self.assertIn("total", res)
+        self.assertGreaterEqual(res["total"], 1)
+
     def test_health_endpoint(self):
         data = server.health_check()
         self.assertEqual(data["status"], "online")
+        self.assertIn("storage_mode", data)
         self.assertIn("spool", data)
 
     def test_landing_page_html(self):
@@ -187,10 +310,18 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn("application/json", resp.media_type)
 
-    def test_console_page_html(self):
+    def test_console_page_html_tabs(self):
         resp = server.console_view()
         self.assertEqual(resp.status_code, 200)
-        self.assertIn("EdgeShield Server Console", resp.body.decode("utf-8"))
+        body = resp.body.decode("utf-8")
+        self.assertIn("EdgeShield Server Console", body)
+        self.assertIn("tab-overview", body)
+        self.assertIn("tab-devices", body)
+        self.assertIn("tab-spool", body)
+        self.assertIn("tab-logs", body)
+        self.assertIn("btn-flush-now", body)
+        self.assertIn("btn-mode-local", body)
+        self.assertIn("btn-mode-databricks", body)
 
 
 if __name__ == "__main__":

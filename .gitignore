@@ -64,6 +64,7 @@ htmlcov/
 spool/
 client/spool/
 server/spool/
+server/data/
 *.db
 *.db-wal
 *.db-shm

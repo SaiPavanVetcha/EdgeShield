@@ -14,6 +14,7 @@ from config import (
     FLUSH_INTERVAL_SECONDS,
     FLUSH_MAX_RECORDS,
 )
+from runtime_config import get_storage_mode
 from spool import count, delete_ids, enqueue, fetch_batch
 
 load_dotenv()
@@ -270,6 +271,18 @@ def flush_spool_to_databricks() -> Tuple[int, int]:
     if pending == 0:
         return 0, 0
 
+    mode = get_storage_mode()
+    if mode == "local":
+        _last_flush_status = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "inserted": 0,
+            "failed": 0,
+            "success": True,
+            "mode": "local",
+            "message": "Storage mode is local; cloud flush skipped (spool retained on disk)",
+        }
+        return 0, 0
+
     if not DATABRICKS_HOST or not DATABRICKS_HTTP_PATH or not DATABRICKS_TOKEN:
         print("[!] Databricks credentials not configured; spool records retained.")
         _last_flush_status = {
@@ -380,12 +393,74 @@ def _spool_flush_worker():
                 should_flush = True
 
         if should_flush:
-            sent, failed = flush_spool_to_databricks()
-            last_flush_time = time.time()
-            last_flush_failed = (failed > 0)
+            mode = get_storage_mode()
+            if mode == "local":
+                # In local storage mode, skip cloud flush; records remain durable in SQLite spool
+                _last_flush_status = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "inserted": 0,
+                    "failed": 0,
+                    "success": True,
+                    "mode": "local",
+                    "message": "Storage mode is local; cloud flush skipped (spool retained on disk)",
+                }
+                last_flush_time = time.time()
+                last_flush_failed = False
+            else:
+                sent, failed = flush_spool_to_databricks()
+                last_flush_time = time.time()
+                last_flush_failed = (failed > 0)
 
         # Sleep briefly to promptly respond to shutdown event
         _stop_event.wait(timeout=0.5)
+
+
+def trigger_flush() -> Dict[str, Any]:
+    """
+    Triggers one flush cycle appropriate to the active storage mode.
+    Returns operational summary including inserted, failed, pending count, mode, and last flush detail.
+    """
+    mode = get_storage_mode()
+    pending = count()
+
+    if mode == "local":
+        status_info = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "inserted": 0,
+            "failed": 0,
+            "success": True,
+            "mode": "local",
+            "message": "Storage mode is local; records retained in spool without cloud sync.",
+        }
+        global _last_flush_status
+        _last_flush_status = status_info
+        return {
+            "status": "success",
+            "mode": "local",
+            "inserted": 0,
+            "failed": 0,
+            "pending": pending,
+            "message": "Storage mode is local; spool records retained durably on disk.",
+            "last_flush": dict(status_info),
+        }
+
+    sent, failed = flush_spool_to_databricks()
+    remaining = count()
+    success = (failed == 0)
+    return {
+        "status": "success" if success else "error",
+        "mode": "databricks",
+        "inserted": sent,
+        "failed": failed,
+        "pending": remaining,
+        "message": (
+            f"Databricks flush completed: {sent} inserted, {failed} failed."
+            if success
+            else f"Databricks flush encountered failures ({failed} records retained in spool)."
+        ),
+        "last_flush": get_last_flush_status(),
+    }
+
 
 
 def start_flush_worker():

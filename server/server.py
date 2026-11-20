@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 import uvicorn
 from contextlib import asynccontextmanager
 
@@ -14,7 +15,6 @@ from config import (
     HOST,
     PORT,
     SPOOL_MAX_RECORDS,
-    STORAGE_MODE,
 )
 from database import (
     flush_spool_to_databricks,
@@ -24,28 +24,34 @@ from database import (
 )
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from log_buffer import attach_log_buffer
 from routes.console_api import router as console_router, get_console_status
 from routes.console_views import render_console_html, render_landing_html
 from routes.metrics import router as metrics_router
+from runtime_config import get_storage_mode
 from spool import count
+
+# Attach in-memory ring buffer handler to root logger
+attach_log_buffer()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
-    print("[*] EdgeShield Central Server initializing...")
+    mode = get_storage_mode()
+    logging.info(f"EdgeShield Central Server initializing (storage_mode={mode})...")
     pending = count()
-    if pending > 0:
-        print(f"[*] Server startup: found {pending} pending spool record(s). Attempting initial flush to Databricks...")
+    if pending > 0 and mode == "databricks":
+        logging.info(f"Server startup: found {pending} pending spool record(s). Attempting initial flush to Databricks...")
         flush_spool_to_databricks()
 
     start_flush_worker()
-    print("[*] EdgeShield Central Server started successfully.")
+    logging.info("EdgeShield Central Server started successfully.")
     yield
     # Shutdown logic
-    print("[*] EdgeShield Central Server shutting down...")
+    logging.info("EdgeShield Central Server shutting down...")
     stop_flush_worker()
-    print("[*] EdgeShield Central Server stopped.")
+    logging.info("EdgeShield Central Server stopped.")
 
 
 app = FastAPI(
@@ -65,7 +71,7 @@ def _build_health_json():
     return {
         "status": "online",
         "system": "EdgeShield Server Backend",
-        "storage_mode": STORAGE_MODE,
+        "storage_mode": get_storage_mode(),
         "spool": {
             "pending": count(),
             "max_records": SPOOL_MAX_RECORDS,
