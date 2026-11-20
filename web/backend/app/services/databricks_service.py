@@ -217,18 +217,20 @@ class DatabricksService:
             device_name = f"Fleet Overview ({room})"
             resolved_room = room
 
+        base_conds = []
         if device_key:
-            filter_clause = f"device_key = '{device_key}' AND"
+            base_conds.append(f"device_key = '{device_key}'")
         elif room and room != "all":
-            filter_clause = f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = '{room}') AND"
-        else:
-            filter_clause = ""
+            base_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = '{room}')")
 
-        # Time filter: if from_ts is very early (e.g. 2020-01-01), treat as no lower bound
         if from_ts and from_ts > "2020-01-01 00:00:00":
-            time_filter = f"event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'"
+            base_conds.append(f"event_timestamp >= '{from_ts}'")
+            base_conds.append(f"event_timestamp <= '{to_ts}'")
         else:
-            time_filter = f"event_timestamp <= '{to_ts}'"
+            base_conds.append(f"event_timestamp <= '{to_ts}'")
+
+        base_where = "WHERE " + " AND ".join(base_conds)
+        batt_where = "WHERE " + " AND ".join(["battery_pct IS NOT NULL"] + base_conds)
 
         cache_key = f"kpis_{device_id}_{room}_{from_ts}_{to_ts}"
 
@@ -256,7 +258,7 @@ class DatabricksService:
                 MIN(cpu_utilization_pct) AS min_cpu,
                 MAX(cpu_utilization_pct) AS max_cpu
             FROM {self.prefix}.fact_cpu_telemetry
-            WHERE {filter_clause} {time_filter}
+            {base_where}
         """
         cpu_rows, is_cached, status = db_manager.execute_query(sql_cpu, cache_key=f"{cache_key}_cpu")
         res.is_cached = is_cached
@@ -285,7 +287,7 @@ class DatabricksService:
                 AVG(ram_used_bytes) / 1073741824.0 AS avg_used_gb,
                 (AVG(ram_used_bytes) + AVG(ram_available_bytes)) / 1073741824.0 AS total_gb
             FROM {self.prefix}.fact_ram_telemetry
-            WHERE {filter_clause} {time_filter}
+            {base_where}
         """
         ram_rows, _, _ = db_manager.execute_query(sql_ram, cache_key=f"{cache_key}_ram")
         if ram_rows and ram_rows[0].get("avg_ram") is not None:
@@ -311,7 +313,7 @@ class DatabricksService:
                 AVG(disk_utilization_pct) AS avg_disk,
                 AVG(disk_free_gb) AS avg_free_gb
             FROM {self.prefix}.fact_disk_telemetry
-            WHERE {filter_clause} {time_filter}
+            {base_where}
         """
         disk_rows, _, _ = db_manager.execute_query(sql_disk, cache_key=f"{cache_key}_disk")
         if disk_rows and disk_rows[0].get("avg_disk") is not None:
@@ -334,7 +336,7 @@ class DatabricksService:
                 AVG(battery_pct) AS avg_battery,
                 AVG(battery_health_pct) AS avg_health
             FROM {self.prefix}.fact_battery_telemetry
-            WHERE {filter_clause} battery_pct IS NOT NULL AND {time_filter}
+            {batt_where}
         """
         battery_rows, _, _ = db_manager.execute_query(sql_battery, cache_key=f"{cache_key}_battery")
         if battery_rows and battery_rows[0].get("avg_battery") is not None:
@@ -359,7 +361,7 @@ class DatabricksService:
                 MAX(temperature_c) AS max_temp,
                 AVG(humidity_percent) AS avg_humidity
             FROM {self.prefix}.fact_environment_telemetry
-            WHERE {filter_clause} {time_filter}
+            {base_where}
         """
         env_rows, _, _ = db_manager.execute_query(sql_env, cache_key=f"{cache_key}_env")
         if env_rows and env_rows[0].get("avg_temp") is not None:
@@ -445,13 +447,23 @@ class DatabricksService:
         else:
             return TimeseriesResponse(metric=metric, device_id=device_id, available=False, points=[])
 
-        extra_filter = f"AND {val_expr} IS NOT NULL" if m == "battery" else ""
+        where_conds = []
+        if device_key:
+            where_conds.append(f"device_key = '{device_key}'")
+        elif room and room != "all":
+            where_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = '{room}')")
+
+        if m == "battery":
+            where_conds.append("battery_pct IS NOT NULL")
 
         # Time filter: if from_ts is very early (e.g. 2020-01-01), treat as no lower bound
         if from_ts and from_ts > "2020-01-01 00:00:00":
-            time_filter = f"event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'"
+            where_conds.append(f"event_timestamp >= '{from_ts}'")
+            where_conds.append(f"event_timestamp <= '{to_ts}'")
         else:
-            time_filter = f"event_timestamp <= '{to_ts}'"
+            where_conds.append(f"event_timestamp <= '{to_ts}'")
+
+        where_clause = "WHERE " + " AND ".join(where_conds)
 
         # Adaptive truncation grain and limits:
         trunc_grain = "minute"
@@ -481,9 +493,9 @@ class DatabricksService:
                 MIN({val_expr}) AS min_val,
                 MAX({val_expr}) AS max_val
             FROM {table_name}
-            WHERE {filter_clause} {extra_filter} {time_filter}
+            {where_clause}
             GROUP BY 1
-            ORDER BY ts ASC
+            ORDER BY 1 ASC
             LIMIT {limit_points}
         """
 
@@ -508,6 +520,8 @@ class DatabricksService:
                         device_id=device_id,
                     )
                 )
+
+        points.sort(key=lambda p: p.timestamp)
 
         return TimeseriesResponse(
             metric=metric,

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   Cpu,
   Layers,
@@ -22,6 +22,7 @@ interface DashboardChartConfig {
   subtitle: string;
   data: any[];
   available: boolean;
+  emptyMessage?: string;
   yDomain: [number, number];
   lines: Array<{
     key: string;
@@ -63,7 +64,10 @@ export const DashboardPage: React.FC = () => {
 
   const hasBattery = useMemo(() => {
     if (selectedDeviceId !== 'all') {
-      return selectedDevice?.capabilities?.has_battery === true;
+      if (selectedDevice) {
+        return selectedDevice.capabilities?.has_battery === true;
+      }
+      return Boolean(kpis?.battery?.available);
     }
     // When selectedDeviceId === 'all', check if any device in scope has battery capability
     const inScopeDevices =
@@ -77,48 +81,93 @@ export const DashboardPage: React.FC = () => {
     return Boolean(kpis?.battery?.available);
   }, [selectedDeviceId, selectedDevice, selectedRoom, devices, kpis]);
 
-  // Prepare individual chart datasets
+  // Helper to ensure every series is strictly sorted ascending by timestamp
+  const sortByTimestampAsc = useCallback(<T extends { timestamp: string }>(items: T[]): T[] => {
+    return [...items].sort((a, b) => {
+      const timeA = new Date(
+        typeof a.timestamp === 'string' && a.timestamp.includes('T')
+          ? a.timestamp
+          : String(a.timestamp).replace(' ', 'T')
+      ).getTime();
+      const timeB = new Date(
+        typeof b.timestamp === 'string' && b.timestamp.includes('T')
+          ? b.timestamp
+          : String(b.timestamp).replace(' ', 'T')
+      ).getTime();
+      if (!isNaN(timeA) && !isNaN(timeB)) {
+        return timeA - timeB;
+      }
+      return String(a.timestamp).localeCompare(String(b.timestamp));
+    });
+  }, []);
+
+  // Prepare individual chart datasets (sorted ascending)
   const cpuData = useMemo(() => {
     if (!cpuTs?.points || cpuTs.points.length === 0) return [];
-    return cpuTs.points.map((p) => ({
+    const mapped = cpuTs.points.map((p) => ({
       timestamp: p.timestamp,
       cpu: p.value,
     }));
-  }, [cpuTs]);
+    return sortByTimestampAsc(mapped);
+  }, [cpuTs, sortByTimestampAsc]);
 
   const ramData = useMemo(() => {
     if (!ramTs?.points || ramTs.points.length === 0) return [];
-    return ramTs.points.map((p) => ({
+    const mapped = ramTs.points.map((p) => ({
       timestamp: p.timestamp,
       ram: p.value,
     }));
-  }, [ramTs]);
+    return sortByTimestampAsc(mapped);
+  }, [ramTs, sortByTimestampAsc]);
 
   const diskData = useMemo(() => {
     if (!diskTs?.points || diskTs.points.length === 0) return [];
-    return diskTs.points.map((p) => ({
+    const mapped = diskTs.points.map((p) => ({
       timestamp: p.timestamp,
       disk: p.value,
     }));
-  }, [diskTs]);
+    return sortByTimestampAsc(mapped);
+  }, [diskTs, sortByTimestampAsc]);
 
   const envData = useMemo(() => {
     if (!envTs?.points || envTs.points.length === 0) return [];
-    return envTs.points.map((p) => ({
+    const mapped = envTs.points.map((p) => ({
       timestamp: p.timestamp,
       temp: p.value,
       humidity: p.secondary_value,
     }));
-  }, [envTs]);
+    return sortByTimestampAsc(mapped);
+  }, [envTs, sortByTimestampAsc]);
 
   const batteryData = useMemo(() => {
     if (!batteryTs?.points || batteryTs.points.length === 0) return [];
-    return batteryTs.points.map((p) => ({
+    const mapped = batteryTs.points.map((p) => ({
       timestamp: p.timestamp,
       level: p.value,
       health: p.secondary_value,
     }));
-  }, [batteryTs]);
+    return sortByTimestampAsc(mapped);
+  }, [batteryTs, sortByTimestampAsc]);
+
+  const batteryLines = useMemo(() => {
+    const lines = [
+      {
+        key: 'level',
+        name: 'Battery Level %',
+        color: '#c084fc', // purple-400
+        unit: '%',
+      },
+    ];
+    if (batteryData.some((p: { health?: number | null }) => p.health != null && p.health > 0)) {
+      lines.push({
+        key: 'health',
+        name: 'Health %',
+        color: '#10b981', // emerald-500
+        unit: '%',
+      });
+    }
+    return lines;
+  }, [batteryData]);
 
   // Defined in strict priority order for Hero Chart selection:
   // 1. CPU Utilization (highest priority)
@@ -203,25 +252,13 @@ export const DashboardPage: React.FC = () => {
         title: 'Power & Battery',
         subtitle: 'Current charge level and battery health capacity',
         data: batteryData,
-        available: Boolean(hasBattery && batteryTs?.available && batteryData.length > 0),
+        available: Boolean(hasBattery),
+        emptyMessage: 'No battery samples in selected range',
         yDomain: [0, 100],
-        lines: [
-          {
-            key: 'level',
-            name: 'Battery Level %',
-            color: '#c084fc', // purple-400
-            unit: '%',
-          },
-          {
-            key: 'health',
-            name: 'Health %',
-            color: '#10b981', // emerald-500
-            unit: '%',
-          },
-        ],
+        lines: batteryLines,
       },
     ],
-    [cpuData, cpuTs, ramData, ramTs, diskData, diskTs, envData, envTs, batteryData, batteryTs, hasBattery]
+    [cpuData, cpuTs, ramData, ramTs, diskData, diskTs, envData, envTs, batteryData, hasBattery, batteryLines]
   );
 
   // Available charts that have actual data
@@ -382,6 +419,7 @@ export const DashboardPage: React.FC = () => {
               subtitle={heroChart.subtitle}
               data={heroChart.data}
               available={heroChart.available}
+              emptyMessage={heroChart.emptyMessage}
               yDomain={heroChart.yDomain}
               lines={heroChart.lines}
               isHero={true}
@@ -404,6 +442,7 @@ export const DashboardPage: React.FC = () => {
                         subtitle={chart.subtitle}
                         data={chart.data}
                         available={chart.available}
+                        emptyMessage={chart.emptyMessage}
                         yDomain={chart.yDomain}
                         lines={chart.lines}
                         isHero={false}
