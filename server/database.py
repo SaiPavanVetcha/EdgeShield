@@ -30,16 +30,43 @@ _last_flush_status: Dict[str, Any] = {
 
 
 def get_connection():
-    """Establishes connection to Databricks SQL Warehouse."""
-    return sql.connect(
-        server_hostname=DATABRICKS_HOST,
-        http_path=DATABRICKS_HTTP_PATH,
-        access_token=DATABRICKS_TOKEN,
-    )
+    """
+    Establishes connection to Databricks SQL Warehouse with transaction support.
+    Passes ignore_transactions=False so PEP 249 commit() and rollback() can be used.
+    """
+    kwargs = {
+        "server_hostname": DATABRICKS_HOST,
+        "http_path": DATABRICKS_HTTP_PATH,
+        "access_token": DATABRICKS_TOKEN,
+    }
+    try:
+        return sql.connect(ignore_transactions=False, **kwargs)
+    except TypeError:
+        return sql.connect(**kwargs)
 
 
-def insert_single_payload(cursor, payload: Dict[str, Any]) -> None:
+def init_connection_transactions(connection) -> bool:
+    """
+    Configures the connection for transactional mode (autocommit=False).
+    Returns True if transaction management is supported and enabled, False otherwise.
+    """
+    if getattr(connection, "ignore_transactions", True):
+        return False
+    try:
+        connection.autocommit = False
+        return True
+    except Exception as e:
+        print(f"[*] Databricks autocommit=False could not be set ({e}); falling back to non-transactional execution.")
+        return False
+
+
+_has_room_column: Optional[bool] = None
+
+
+def insert_single_payload(cursor, payload: Dict[str, Any], connection: Optional[Any] = None) -> None:
     """Executes Databricks SQL INSERT statements for a single telemetry payload."""
+    global _has_room_column
+
     event_id = str(uuid.uuid4())
     device_id = payload.get("device_id")
     hostname = payload.get("hostname")
@@ -59,44 +86,68 @@ def insert_single_payload(cursor, payload: Dict[str, Any]) -> None:
 
     # 1. System metrics
     if system:
-        try:
+        if _has_room_column is False:
             cursor.execute(
                 """
                 INSERT INTO edgeshield_db.system_metrics 
-                (event_id, device_id, hostname, room, timestamp, platform, boot_time_utc)
-                VALUES (?, ?, ?, ?, CAST(? AS TIMESTAMP), ?, CAST(? AS TIMESTAMP))
+                (event_id, device_id, hostname, timestamp, platform, boot_time_utc)
+                VALUES (?, ?, ?, CAST(? AS TIMESTAMP), ?, CAST(? AS TIMESTAMP))
                 """,
                 (
                     event_id,
                     device_id,
                     hostname,
-                    room,
                     timestamp,
                     system.get("platform"),
                     system.get("boot_time_utc"),
                 ),
             )
-        except Exception as e:
-            # Fallback for environments where the 'room' column migration has not been applied yet
-            err_msg = str(e).lower()
-            if "room" in err_msg or "column" in err_msg or "cannot be resolved" in err_msg:
+        else:
+            try:
                 cursor.execute(
                     """
                     INSERT INTO edgeshield_db.system_metrics 
-                    (event_id, device_id, hostname, timestamp, platform, boot_time_utc)
-                    VALUES (?, ?, ?, CAST(? AS TIMESTAMP), ?, CAST(? AS TIMESTAMP))
+                    (event_id, device_id, hostname, room, timestamp, platform, boot_time_utc)
+                    VALUES (?, ?, ?, ?, CAST(? AS TIMESTAMP), ?, CAST(? AS TIMESTAMP))
                     """,
                     (
                         event_id,
                         device_id,
                         hostname,
+                        room,
                         timestamp,
                         system.get("platform"),
                         system.get("boot_time_utc"),
                     ),
                 )
-            else:
-                raise
+                _has_room_column = True
+            except Exception as e:
+                # Fallback for environments where the 'room' column migration has not been applied yet
+                err_msg = str(e).lower()
+                if "room" in err_msg or "column" in err_msg or "cannot be resolved" in err_msg:
+                    _has_room_column = False
+                    if connection and getattr(connection, "autocommit", True) is False:
+                        try:
+                            connection.rollback()
+                        except Exception:
+                            pass
+                    cursor.execute(
+                        """
+                        INSERT INTO edgeshield_db.system_metrics 
+                        (event_id, device_id, hostname, timestamp, platform, boot_time_utc)
+                        VALUES (?, ?, ?, CAST(? AS TIMESTAMP), ?, CAST(? AS TIMESTAMP))
+                        """,
+                        (
+                            event_id,
+                            device_id,
+                            hostname,
+                            timestamp,
+                            system.get("platform"),
+                            system.get("boot_time_utc"),
+                        ),
+                    )
+                else:
+                    raise
 
     # 2. CPU metrics
     if cpu:
@@ -207,8 +258,10 @@ def insert_single_payload(cursor, payload: Dict[str, Any]) -> None:
 def flush_spool_to_databricks() -> Tuple[int, int]:
     """
     Drains pending records from the local durable spool and inserts them into Databricks.
-    Removes records from the spool upon successful insert.
-    Aborts immediately on connection or insert failure, retaining unwritten records in the spool.
+    Inserts for each payload are executed inside an atomic transaction (all-or-nothing).
+    Removes records from the spool ONLY upon successful transaction commit.
+    On failure: rolls back partial writes, retains the record in the spool, logs clearly,
+    and aborts the batch to prevent further errors while preserving unwritten records for retry.
     Returns (sent_count, failed_count).
     """
     global _last_flush_status
@@ -234,6 +287,7 @@ def flush_spool_to_databricks() -> Tuple[int, int]:
 
     try:
         connection = get_connection()
+        supports_tx = init_connection_transactions(connection)
         cursor = connection.cursor()
 
         while True:
@@ -244,11 +298,30 @@ def flush_spool_to_databricks() -> Tuple[int, int]:
             batch_aborted = False
             for record_id, payload in batch:
                 try:
-                    insert_single_payload(cursor, payload)
+                    # 1. Execute all conditional inserts for this payload
+                    insert_single_payload(cursor, payload, connection=connection)
+
+                    # 2. Commit transaction atomically across all inserts for this payload
+                    if supports_tx:
+                        connection.commit()
+
+                    # 3. Only remove from durable spool AFTER full payload transaction succeeds
                     delete_ids([record_id])
                     total_sent += 1
                 except Exception as rec_err:
-                    print(f"[!] Error inserting record id={record_id} to Databricks: {rec_err}")
+                    # 4. Rollback uncommitted inserts for this payload on failure
+                    if supports_tx:
+                        try:
+                            connection.rollback()
+                        except Exception as rb_err:
+                            print(f"[!] Warning: transaction rollback failed for record id={record_id}: {rb_err}")
+
+                    # 5. Leave record in spool, log clearly, abort batch per safe retry design
+                    print(
+                        f"[!] Error inserting record id={record_id} to Databricks "
+                        f"(transaction {'rolled back' if supports_tx else 'aborted'}; "
+                        f"record retained in spool for retry): {rec_err}"
+                    )
                     total_failed += 1
                     batch_aborted = True
                     break
