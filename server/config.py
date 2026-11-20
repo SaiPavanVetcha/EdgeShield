@@ -26,3 +26,7 @@ FLUSH_INTERVAL_SECONDS = float(os.getenv("FLUSH_INTERVAL_SECONDS", "5.0"))
 FLUSH_MAX_RECORDS = int(os.getenv("FLUSH_MAX_RECORDS", os.getenv("BATCH_SIZE", "20")))
 BATCH_SIZE = FLUSH_MAX_RECORDS
 SPOOL_MAX_RECORDS = int(os.getenv("SPOOL_MAX_RECORDS", "10000"))
+
+# Storage Mode Settings (default: "databricks")
+STORAGE_MODE = os.getenv("STORAGE_MODE", "databricks")
+

@@ -1,3 +1,4 @@
+from device_registry import upsert_from_request
 from spool import enqueue
 from fastapi import APIRouter, HTTPException, Request
 
@@ -19,6 +20,13 @@ async def receive_metrics(request: Request):
 
         # Durably append payload to SQLite spool
         enqueue(data)
+
+        # Update in-memory device registry with client host IP
+        client_ip = request.client.host if request.client else "unknown"
+        try:
+            upsert_from_request(data, client_ip)
+        except Exception:
+            pass
 
         response = {
             "status": "success",

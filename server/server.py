@@ -1,11 +1,20 @@
+import os
+import sys
 import uvicorn
 from contextlib import asynccontextmanager
+
+# Ensure server package directory is in sys.path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 from config import (
     FLUSH_INTERVAL_SECONDS,
     FLUSH_MAX_RECORDS,
     HOST,
     PORT,
     SPOOL_MAX_RECORDS,
+    STORAGE_MODE,
 )
 from database import (
     flush_spool_to_databricks,
@@ -13,7 +22,10 @@ from database import (
     start_flush_worker,
     stop_flush_worker,
 )
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from routes.console_api import router as console_router, get_console_status
+from routes.console_views import render_console_html, render_landing_html
 from routes.metrics import router as metrics_router
 from spool import count
 
@@ -45,13 +57,15 @@ app = FastAPI(
 
 # Register routes
 app.include_router(metrics_router)
+app.include_router(console_router)
 
 
-@app.get("/")
-def health_check():
+def _build_health_json():
+    """Generates standard JSON health check structure."""
     return {
         "status": "online",
         "system": "EdgeShield Server Backend",
+        "storage_mode": STORAGE_MODE,
         "spool": {
             "pending": count(),
             "max_records": SPOOL_MAX_RECORDS,
@@ -60,6 +74,35 @@ def health_check():
             "last_flush": get_last_flush_status(),
         },
     }
+
+
+@app.get("/health")
+@app.get("/api/health")
+def health_check():
+    """JSON health endpoint reporting service online state and spool stats."""
+    return _build_health_json()
+
+
+@app.get("/console", response_class=HTMLResponse)
+def console_view():
+    """Ops Console UI displaying registered devices and telemetry stream."""
+    return HTMLResponse(content=render_console_html())
+
+
+@app.get("/")
+def root_endpoint(request: Request):
+    """
+    Root endpoint:
+    - Serves clean HTML landing page by default for browsers.
+    - Serves JSON health if the client explicitly requests application/json without text/html.
+    """
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept and "text/html" not in accept:
+        return JSONResponse(content=_build_health_json())
+
+    status_data = get_console_status()
+    html_content = render_landing_html(status_data)
+    return HTMLResponse(content=html_content)
 
 
 if __name__ == "__main__":
