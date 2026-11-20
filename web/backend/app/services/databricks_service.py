@@ -224,6 +224,12 @@ class DatabricksService:
         else:
             filter_clause = ""
 
+        # Time filter: if from_ts is very early (e.g. 2020-01-01), treat as no lower bound
+        if from_ts and from_ts > "2020-01-01 00:00:00":
+            time_filter = f"event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'"
+        else:
+            time_filter = f"event_timestamp <= '{to_ts}'"
+
         cache_key = f"kpis_{device_id}_{room}_{from_ts}_{to_ts}"
 
         # Default empty response
@@ -250,7 +256,7 @@ class DatabricksService:
                 MIN(cpu_utilization_pct) AS min_cpu,
                 MAX(cpu_utilization_pct) AS max_cpu
             FROM {self.prefix}.fact_cpu_telemetry
-            WHERE {filter_clause} event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
+            WHERE {filter_clause} {time_filter}
         """
         cpu_rows, is_cached, status = db_manager.execute_query(sql_cpu, cache_key=f"{cache_key}_cpu")
         res.is_cached = is_cached
@@ -279,7 +285,7 @@ class DatabricksService:
                 AVG(ram_used_bytes) / 1073741824.0 AS avg_used_gb,
                 (AVG(ram_used_bytes) + AVG(ram_available_bytes)) / 1073741824.0 AS total_gb
             FROM {self.prefix}.fact_ram_telemetry
-            WHERE {filter_clause} event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
+            WHERE {filter_clause} {time_filter}
         """
         ram_rows, _, _ = db_manager.execute_query(sql_ram, cache_key=f"{cache_key}_ram")
         if ram_rows and ram_rows[0].get("avg_ram") is not None:
@@ -305,7 +311,7 @@ class DatabricksService:
                 AVG(disk_utilization_pct) AS avg_disk,
                 AVG(disk_free_gb) AS avg_free_gb
             FROM {self.prefix}.fact_disk_telemetry
-            WHERE {filter_clause} event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
+            WHERE {filter_clause} {time_filter}
         """
         disk_rows, _, _ = db_manager.execute_query(sql_disk, cache_key=f"{cache_key}_disk")
         if disk_rows and disk_rows[0].get("avg_disk") is not None:
@@ -328,7 +334,7 @@ class DatabricksService:
                 AVG(battery_pct) AS avg_battery,
                 AVG(battery_health_pct) AS avg_health
             FROM {self.prefix}.fact_battery_telemetry
-            WHERE {filter_clause} battery_pct IS NOT NULL AND event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
+            WHERE {filter_clause} battery_pct IS NOT NULL AND {time_filter}
         """
         battery_rows, _, _ = db_manager.execute_query(sql_battery, cache_key=f"{cache_key}_battery")
         if battery_rows and battery_rows[0].get("avg_battery") is not None:
@@ -353,7 +359,7 @@ class DatabricksService:
                 MAX(temperature_c) AS max_temp,
                 AVG(humidity_percent) AS avg_humidity
             FROM {self.prefix}.fact_environment_telemetry
-            WHERE {filter_clause} event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
+            WHERE {filter_clause} {time_filter}
         """
         env_rows, _, _ = db_manager.execute_query(sql_env, cache_key=f"{cache_key}_env")
         if env_rows and env_rows[0].get("avg_temp") is not None:
@@ -441,18 +447,44 @@ class DatabricksService:
 
         extra_filter = f"AND {val_expr} IS NOT NULL" if m == "battery" else ""
 
+        # Time filter: if from_ts is very early (e.g. 2020-01-01), treat as no lower bound
+        if from_ts and from_ts > "2020-01-01 00:00:00":
+            time_filter = f"event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'"
+        else:
+            time_filter = f"event_timestamp <= '{to_ts}'"
+
+        # Adaptive truncation grain and limits:
+        trunc_grain = "minute"
+        limit_points = 500
+        try:
+            from_dt = datetime.strptime(from_ts, "%Y-%m-%d %H:%M:%S")
+            to_dt = datetime.strptime(to_ts, "%Y-%m-%d %H:%M:%S")
+            diff_hours = (to_dt - from_dt).total_seconds() / 3600.0
+        except Exception:
+            diff_hours = 24.0
+
+        if not from_ts or from_ts <= "2020-01-01 00:00:00" or diff_hours > 168:
+            trunc_grain = "hour"
+            limit_points = 1000
+        elif diff_hours > 24:
+            trunc_grain = "hour"
+            limit_points = 500
+        else:
+            trunc_grain = "minute"
+            limit_points = 500
+
         sql = f"""
             SELECT
-                DATE_TRUNC('minute', event_timestamp) AS ts,
+                DATE_TRUNC('{trunc_grain}', event_timestamp) AS ts,
                 AVG({val_expr}) AS val,
                 AVG({sec_expr}) AS sec_val,
                 MIN({val_expr}) AS min_val,
                 MAX({val_expr}) AS max_val
             FROM {table_name}
-            WHERE {filter_clause} {extra_filter} event_timestamp >= '{from_ts}' AND event_timestamp <= '{to_ts}'
+            WHERE {filter_clause} {extra_filter} {time_filter}
             GROUP BY 1
             ORDER BY ts ASC
-            LIMIT 500
+            LIMIT {limit_points}
         """
 
         rows, is_cached, status = db_manager.execute_query(sql, cache_key=cache_key)

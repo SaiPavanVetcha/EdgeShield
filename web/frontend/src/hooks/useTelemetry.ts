@@ -51,6 +51,7 @@ export function useTelemetry() {
     else if (preset === '6h') from.setHours(to.getHours() - 6);
     else if (preset === '24h') from.setHours(to.getHours() - 24);
     else if (preset === '7d') from.setDate(to.getDate() - 7);
+    else if (preset === 'all') return { from: '2020-01-01T00:00:00.000Z', to: to.toISOString() };
     return { from: from.toISOString(), to: to.toISOString() };
   };
 

@@ -118,7 +118,7 @@ export interface HealthResponse {
   cached_queries: number;
 }
 
-export type PresetTimeRange = '1h' | '6h' | '24h' | '7d';
+export type PresetTimeRange = '1h' | '6h' | '24h' | '7d' | 'all';
 
 export interface TimeRangeState {
   preset: PresetTimeRange | 'custom';

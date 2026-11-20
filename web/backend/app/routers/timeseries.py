@@ -10,6 +10,8 @@ router = APIRouter(prefix="/api/timeseries", tags=["timeseries"])
 def normalize_ts(ts: Optional[str], default_dt: datetime) -> str:
     if not ts:
         return default_dt.strftime("%Y-%m-%d %H:%M:%S")
+    if ts.lower() == "all":
+        return "2020-01-01 00:00:00"
     clean = ts.replace("T", " ").replace("Z", "").split(".")[0].strip()
     return clean
 

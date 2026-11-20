@@ -58,7 +58,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [customFrom, setCustomFrom] = useState(formatForInput(timeRange.from));
   const [customTo, setCustomTo] = useState(formatForInput(timeRange.to));
 
-  const presets: PresetTimeRange[] = ['1h', '6h', '24h', '7d'];
+  const presets: PresetTimeRange[] = ['1h', '6h', '24h', '7d', 'all'];
 
   const selectedDevice = devices.find((d) => d.device_id === selectedDeviceId);
 
@@ -263,7 +263,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
-              {preset}
+              {preset === 'all' ? 'All' : preset}
             </button>
           ))}
         </div>
