@@ -105,6 +105,8 @@ class AlertEngine:
                 )
 
         # 2. CPU > 85% sustained
+        window_params = {"window_ts": recent_window_ts}
+
         sql_cpu = f"""
             SELECT
                 d.device_id,
@@ -113,11 +115,11 @@ class AlertEngine:
                 MAX(c.event_timestamp) AS latest_ts
             FROM {self.prefix}.fact_cpu_telemetry c
             JOIN {self.prefix}.dim_device d ON c.device_key = d.device_key
-            WHERE c.event_timestamp >= '{recent_window_ts}'
+            WHERE c.event_timestamp >= :window_ts
             GROUP BY d.device_id, d.hostname
             HAVING AVG(c.cpu_utilization_pct) > 85.0
         """
-        cpu_rows, _, _ = db_manager.execute_query(sql_cpu, cache_key="alerts_cpu")
+        cpu_rows, _, _ = db_manager.execute_query(sql_cpu, params=window_params, cache_key="alerts_cpu")
         for r in cpu_rows:
             dev_id = r["device_id"]
             avg_cpu = round(float(r["avg_cpu"]), 1)
@@ -150,11 +152,11 @@ class AlertEngine:
                 MAX(r.event_timestamp) AS latest_ts
             FROM {self.prefix}.fact_ram_telemetry r
             JOIN {self.prefix}.dim_device d ON r.device_key = d.device_key
-            WHERE r.event_timestamp >= '{recent_window_ts}'
+            WHERE r.event_timestamp >= :window_ts
             GROUP BY d.device_id, d.hostname
             HAVING AVG(r.ram_utilization_pct) > 90.0
         """
-        ram_rows, _, _ = db_manager.execute_query(sql_ram, cache_key="alerts_ram")
+        ram_rows, _, _ = db_manager.execute_query(sql_ram, params=window_params, cache_key="alerts_ram")
         for r in ram_rows:
             dev_id = r["device_id"]
             avg_ram = round(float(r["avg_ram"]), 1)
@@ -187,11 +189,11 @@ class AlertEngine:
                 MAX(k.event_timestamp) AS latest_ts
             FROM {self.prefix}.fact_disk_telemetry k
             JOIN {self.prefix}.dim_device d ON k.device_key = d.device_key
-            WHERE k.event_timestamp >= '{recent_window_ts}'
+            WHERE k.event_timestamp >= :window_ts
             GROUP BY d.device_id, d.hostname
             HAVING MAX(k.disk_utilization_pct) > 90.0
         """
-        disk_rows, _, _ = db_manager.execute_query(sql_disk, cache_key="alerts_disk")
+        disk_rows, _, _ = db_manager.execute_query(sql_disk, params=window_params, cache_key="alerts_disk")
         for r in disk_rows:
             dev_id = r["device_id"]
             max_d = round(float(r["max_disk"]), 1)
@@ -224,11 +226,11 @@ class AlertEngine:
                 MAX(e.event_timestamp) AS latest_ts
             FROM {self.prefix}.fact_environment_telemetry e
             JOIN {self.prefix}.dim_device d ON e.device_key = d.device_key
-            WHERE e.event_timestamp >= '{recent_window_ts}'
+            WHERE e.event_timestamp >= :window_ts
             GROUP BY d.device_id, d.hostname
             HAVING MAX(e.temperature_c) > 35.0
         """
-        env_rows, _, _ = db_manager.execute_query(sql_env, cache_key="alerts_env")
+        env_rows, _, _ = db_manager.execute_query(sql_env, params=window_params, cache_key="alerts_env")
         for r in env_rows:
             dev_id = r["device_id"]
             max_t = round(float(r["max_temp"]), 1)
@@ -262,13 +264,13 @@ class AlertEngine:
                 MAX(b.event_timestamp) AS latest_ts
             FROM {self.prefix}.fact_battery_telemetry b
             JOIN {self.prefix}.dim_device d ON b.device_key = d.device_key
-            WHERE b.event_timestamp >= '{recent_window_ts}'
+            WHERE b.event_timestamp >= :window_ts
               AND b.battery_pct IS NOT NULL
             GROUP BY d.device_id, d.hostname
             HAVING (MIN(b.battery_pct) IS NOT NULL AND MIN(b.battery_pct) < 20.0)
                 OR (MIN(b.battery_health_pct) IS NOT NULL AND MIN(b.battery_health_pct) < 60.0)
         """
-        batt_rows, _, _ = db_manager.execute_query(sql_batt, cache_key="alerts_batt")
+        batt_rows, _, _ = db_manager.execute_query(sql_batt, params=window_params, cache_key="alerts_batt")
         for r in batt_rows:
             if r.get("min_batt") is None and r.get("min_health") is None:
                 continue

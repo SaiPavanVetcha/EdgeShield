@@ -2,6 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from app.models import DeviceListResponse
 from app.services.databricks_service import databricks_service
+from app.validation import validate_room
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
@@ -13,6 +14,9 @@ def get_devices(room: Optional[str] = Query(None, description="Optional room fil
     along with calculated status (online/warning/offline), capabilities, and room metadata.
     """
     try:
-        return databricks_service.get_devices(room=room)
+        clean_room = validate_room(room)
+        return databricks_service.get_devices(room=clean_room)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

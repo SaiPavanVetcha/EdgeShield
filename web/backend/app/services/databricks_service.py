@@ -12,6 +12,15 @@ from app.models import (
     TimeseriesPoint,
     TimeseriesResponse,
 )
+from app.validation import (
+    validate_device_id,
+    validate_room,
+    validate_timestamp,
+    validate_metric,
+    validate_device_key,
+    validate_trunc_grain,
+    ALLOWED_METRICS,
+)
 
 logger = logging.getLogger("edgeshield.databricks_service")
 
@@ -185,62 +194,76 @@ class DatabricksService:
         )
 
     def _resolve_device_key(self, device_id: str) -> Optional[str]:
-        if device_id.lower() == "all":
+        if not device_id or device_id.lower() == "all":
             return None
-        sql = f"SELECT device_key FROM {self.prefix}.dim_device WHERE device_id = '{device_id}' LIMIT 1"
-        rows, _, _ = db_manager.execute_query(sql, cache_key=f"dev_key_{device_id}")
+        safe_dev_id = validate_device_id(device_id)
+        sql = f"SELECT device_key FROM {self.prefix}.dim_device WHERE device_id = :device_id LIMIT 1"
+        rows, _, _ = db_manager.execute_query(sql, params={"device_id": safe_dev_id}, cache_key=f"dev_key_{safe_dev_id}")
         if rows:
-            return rows[0]["device_key"]
+            return validate_device_key(rows[0]["device_key"])
         return None
 
     def get_kpis(self, device_id: str, from_ts: str, to_ts: str, room: Optional[str] = None) -> KPISummaryResponse:
         """
         Calculates KPIs for CPU, RAM, Disk, Battery, Temperature, Humidity.
         Each metric is queried independently to handle ESP32 / PC client timestamp mismatches.
+        Uses parameterized queries with strict validation.
         """
+        safe_dev_id = validate_device_id(device_id)
+        safe_room = validate_room(room)
+        safe_from_ts = validate_timestamp(from_ts)
+        safe_to_ts = validate_timestamp(to_ts)
+
         device_key = None
         device_name = "Fleet Overview"
         resolved_room = None
 
-        if device_id != "all":
+        if safe_dev_id != "all":
             try:
-                sql_dev = f"SELECT device_key, hostname, room FROM {self.prefix}.dim_device WHERE device_id = '{device_id}' LIMIT 1"
-                dev_rows, _, _ = db_manager.execute_query(sql_dev, cache_key=f"dev_meta_{device_id}")
+                sql_dev = f"SELECT device_key, hostname, room FROM {self.prefix}.dim_device WHERE device_id = :device_id LIMIT 1"
+                dev_rows, _, _ = db_manager.execute_query(sql_dev, params={"device_id": safe_dev_id}, cache_key=f"dev_meta_{safe_dev_id}")
                 if dev_rows:
-                    device_key = dev_rows[0]["device_key"]
-                    device_name = dev_rows[0].get("hostname") or device_id
+                    device_key = validate_device_key(dev_rows[0]["device_key"])
+                    device_name = dev_rows[0].get("hostname") or safe_dev_id
                     resolved_room = dev_rows[0].get("room")
             except Exception:
-                device_key = self._resolve_device_key(device_id)
-                device_name = device_id
-        elif room and room != "all":
-            device_name = f"Fleet Overview ({room})"
-            resolved_room = room
+                device_key = self._resolve_device_key(safe_dev_id)
+                device_name = safe_dev_id
+        elif safe_room and safe_room != "all":
+            device_name = f"Fleet Overview ({safe_room})"
+            resolved_room = safe_room
 
         base_conds = []
-        if device_key:
-            base_conds.append(f"device_key = '{device_key}'")
-        elif room and room != "all":
-            base_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = '{room}')")
+        params: Dict[str, Any] = {}
 
-        if from_ts and from_ts > "2020-01-01 00:00:00":
-            base_conds.append(f"event_timestamp >= '{from_ts}'")
-            base_conds.append(f"event_timestamp <= '{to_ts}'")
+        if device_key:
+            base_conds.append("device_key = :device_key")
+            params["device_key"] = device_key
+        elif safe_room and safe_room != "all":
+            base_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = :room)")
+            params["room"] = safe_room
+
+        if safe_from_ts and safe_from_ts > "2020-01-01 00:00:00":
+            base_conds.append("event_timestamp >= :from_ts")
+            base_conds.append("event_timestamp <= :to_ts")
+            params["from_ts"] = safe_from_ts
+            params["to_ts"] = safe_to_ts
         else:
-            base_conds.append(f"event_timestamp <= '{to_ts}'")
+            base_conds.append("event_timestamp <= :to_ts")
+            params["to_ts"] = safe_to_ts
 
         base_where = "WHERE " + " AND ".join(base_conds)
         batt_where = "WHERE " + " AND ".join(["battery_pct IS NOT NULL"] + base_conds)
 
-        cache_key = f"kpis_{device_id}_{room}_{from_ts}_{to_ts}"
+        cache_key = f"kpis_{safe_dev_id}_{safe_room}_{safe_from_ts}_{safe_to_ts}"
 
         # Default empty response
         res = KPISummaryResponse(
-            device_id=device_id,
+            device_id=safe_dev_id,
             device_name=device_name,
             room=resolved_room,
-            time_range_from=from_ts,
-            time_range_to=to_ts,
+            time_range_from=safe_from_ts,
+            time_range_to=safe_to_ts,
             cpu=MetricKPI(available=False, unit="%"),
             ram=MetricKPI(available=False, unit="%"),
             disk=MetricKPI(available=False, unit="%"),
@@ -260,7 +283,7 @@ class DatabricksService:
             FROM {self.prefix}.fact_cpu_telemetry
             {base_where}
         """
-        cpu_rows, is_cached, status = db_manager.execute_query(sql_cpu, cache_key=f"{cache_key}_cpu")
+        cpu_rows, is_cached, status = db_manager.execute_query(sql_cpu, params=params, cache_key=f"{cache_key}_cpu")
         res.is_cached = is_cached
         res.warehouse_status = status
 
@@ -289,7 +312,7 @@ class DatabricksService:
             FROM {self.prefix}.fact_ram_telemetry
             {base_where}
         """
-        ram_rows, _, _ = db_manager.execute_query(sql_ram, cache_key=f"{cache_key}_ram")
+        ram_rows, _, _ = db_manager.execute_query(sql_ram, params=params, cache_key=f"{cache_key}_ram")
         if ram_rows and ram_rows[0].get("avg_ram") is not None:
             avg_r = round(float(ram_rows[0]["avg_ram"]), 1)
             used_g = round(float(ram_rows[0]["avg_used_gb"]), 1) if ram_rows[0].get("avg_used_gb") else None
@@ -315,7 +338,7 @@ class DatabricksService:
             FROM {self.prefix}.fact_disk_telemetry
             {base_where}
         """
-        disk_rows, _, _ = db_manager.execute_query(sql_disk, cache_key=f"{cache_key}_disk")
+        disk_rows, _, _ = db_manager.execute_query(sql_disk, params=params, cache_key=f"{cache_key}_disk")
         if disk_rows and disk_rows[0].get("avg_disk") is not None:
             avg_d = round(float(disk_rows[0]["avg_disk"]), 1)
             free_g = round(float(disk_rows[0]["avg_free_gb"]), 1) if disk_rows[0].get("avg_free_gb") else None
@@ -338,7 +361,7 @@ class DatabricksService:
             FROM {self.prefix}.fact_battery_telemetry
             {batt_where}
         """
-        battery_rows, _, _ = db_manager.execute_query(sql_battery, cache_key=f"{cache_key}_battery")
+        battery_rows, _, _ = db_manager.execute_query(sql_battery, params=params, cache_key=f"{cache_key}_battery")
         if battery_rows and battery_rows[0].get("avg_battery") is not None:
             avg_b = round(float(battery_rows[0]["avg_battery"]), 1)
             avg_h = round(float(battery_rows[0]["avg_health"]), 1) if battery_rows[0].get("avg_health") else None
@@ -363,7 +386,7 @@ class DatabricksService:
             FROM {self.prefix}.fact_environment_telemetry
             {base_where}
         """
-        env_rows, _, _ = db_manager.execute_query(sql_env, cache_key=f"{cache_key}_env")
+        env_rows, _, _ = db_manager.execute_query(sql_env, params=params, cache_key=f"{cache_key}_env")
         if env_rows and env_rows[0].get("avg_temp") is not None:
             avg_t = round(float(env_rows[0]["avg_temp"]), 1)
             min_t = round(float(env_rows[0]["min_temp"]), 1)
@@ -403,65 +426,55 @@ class DatabricksService:
     ) -> TimeseriesResponse:
         """
         Fetches downsampled or aggregated time series points for charting.
+        Uses parameterized queries with strict validation.
         """
-        device_key = self._resolve_device_key(device_id) if device_id != "all" else None
-        if device_key:
-            filter_clause = f"device_key = '{device_key}' AND"
-        elif room and room != "all":
-            filter_clause = f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = '{room}') AND"
-        else:
-            filter_clause = ""
+        safe_dev_id = validate_device_id(device_id)
+        safe_metric = validate_metric(metric)
+        safe_room = validate_room(room)
+        safe_from_ts = validate_timestamp(from_ts)
+        safe_to_ts = validate_timestamp(to_ts)
 
-        cache_key = f"ts_{metric}_{device_id}_{room}_{from_ts}_{to_ts}"
+        device_key = self._resolve_device_key(safe_dev_id) if safe_dev_id != "all" else None
+        cache_key = f"ts_{safe_metric}_{safe_dev_id}_{safe_room}_{safe_from_ts}_{safe_to_ts}"
 
-        # Choose table and column expressions
-        table_name = ""
-        val_expr = ""
-        sec_expr = "NULL"
+        # Choose table and column expressions via strict dictionary lookup (NO string interpolation from input)
+        METRIC_MAP = {
+            "cpu": (f"{self.prefix}.fact_cpu_telemetry", "cpu_utilization_pct", "cpu_freq_current_mhz"),
+            "ram": (f"{self.prefix}.fact_ram_telemetry", "ram_utilization_pct", "ram_used_bytes / 1073741824.0"),
+            "disk": (f"{self.prefix}.fact_disk_telemetry", "disk_utilization_pct", "disk_free_gb"),
+            "battery": (f"{self.prefix}.fact_battery_telemetry", "battery_pct", "battery_health_pct"),
+            "temperature": (f"{self.prefix}.fact_environment_telemetry", "temperature_c", "humidity_percent"),
+            "environment": (f"{self.prefix}.fact_environment_telemetry", "temperature_c", "humidity_percent"),
+            "humidity": (f"{self.prefix}.fact_environment_telemetry", "humidity_percent", "temperature_c"),
+        }
 
-        m = metric.lower()
-        if m == "cpu":
-            table_name = f"{self.prefix}.fact_cpu_telemetry"
-            val_expr = "cpu_utilization_pct"
-            sec_expr = "cpu_freq_current_mhz"
-        elif m == "ram":
-            table_name = f"{self.prefix}.fact_ram_telemetry"
-            val_expr = "ram_utilization_pct"
-            sec_expr = "ram_used_bytes / 1073741824.0"
-        elif m == "disk":
-            table_name = f"{self.prefix}.fact_disk_telemetry"
-            val_expr = "disk_utilization_pct"
-            sec_expr = "disk_free_gb"
-        elif m == "battery":
-            table_name = f"{self.prefix}.fact_battery_telemetry"
-            val_expr = "battery_pct"
-            sec_expr = "battery_health_pct"
-        elif m == "temperature" or m == "environment":
-            table_name = f"{self.prefix}.fact_environment_telemetry"
-            val_expr = "temperature_c"
-            sec_expr = "humidity_percent"
-        elif m == "humidity":
-            table_name = f"{self.prefix}.fact_environment_telemetry"
-            val_expr = "humidity_percent"
-            sec_expr = "temperature_c"
-        else:
-            return TimeseriesResponse(metric=metric, device_id=device_id, available=False, points=[])
+        if safe_metric not in METRIC_MAP:
+            return TimeseriesResponse(metric=safe_metric, device_id=safe_dev_id, available=False, points=[])
+
+        table_name, val_expr, sec_expr = METRIC_MAP[safe_metric]
 
         where_conds = []
-        if device_key:
-            where_conds.append(f"device_key = '{device_key}'")
-        elif room and room != "all":
-            where_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = '{room}')")
+        params: Dict[str, Any] = {}
 
-        if m == "battery":
+        if device_key:
+            where_conds.append("device_key = :device_key")
+            params["device_key"] = device_key
+        elif safe_room and safe_room != "all":
+            where_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = :room)")
+            params["room"] = safe_room
+
+        if safe_metric == "battery":
             where_conds.append("battery_pct IS NOT NULL")
 
         # Time filter: if from_ts is very early (e.g. 2020-01-01), treat as no lower bound
-        if from_ts and from_ts > "2020-01-01 00:00:00":
-            where_conds.append(f"event_timestamp >= '{from_ts}'")
-            where_conds.append(f"event_timestamp <= '{to_ts}'")
+        if safe_from_ts and safe_from_ts > "2020-01-01 00:00:00":
+            where_conds.append("event_timestamp >= :from_ts")
+            where_conds.append("event_timestamp <= :to_ts")
+            params["from_ts"] = safe_from_ts
+            params["to_ts"] = safe_to_ts
         else:
-            where_conds.append(f"event_timestamp <= '{to_ts}'")
+            where_conds.append("event_timestamp <= :to_ts")
+            params["to_ts"] = safe_to_ts
 
         where_clause = "WHERE " + " AND ".join(where_conds)
 
@@ -469,13 +482,13 @@ class DatabricksService:
         trunc_grain = "minute"
         limit_points = 500
         try:
-            from_dt = datetime.strptime(from_ts, "%Y-%m-%d %H:%M:%S")
-            to_dt = datetime.strptime(to_ts, "%Y-%m-%d %H:%M:%S")
+            from_dt = datetime.strptime(safe_from_ts, "%Y-%m-%d %H:%M:%S")
+            to_dt = datetime.strptime(safe_to_ts, "%Y-%m-%d %H:%M:%S")
             diff_hours = (to_dt - from_dt).total_seconds() / 3600.0
         except Exception:
             diff_hours = 24.0
 
-        if not from_ts or from_ts <= "2020-01-01 00:00:00" or diff_hours > 168:
+        if not safe_from_ts or safe_from_ts <= "2020-01-01 00:00:00" or diff_hours > 168:
             trunc_grain = "hour"
             limit_points = 1000
         elif diff_hours > 24:
@@ -485,9 +498,12 @@ class DatabricksService:
             trunc_grain = "minute"
             limit_points = 500
 
+        safe_grain = validate_trunc_grain(trunc_grain)
+        safe_limit = int(limit_points)
+
         sql = f"""
             SELECT
-                DATE_TRUNC('{trunc_grain}', event_timestamp) AS ts,
+                DATE_TRUNC('{safe_grain}', event_timestamp) AS ts,
                 AVG({val_expr}) AS val,
                 AVG({sec_expr}) AS sec_val,
                 MIN({val_expr}) AS min_val,
@@ -496,10 +512,10 @@ class DatabricksService:
             {where_clause}
             GROUP BY 1
             ORDER BY 1 ASC
-            LIMIT {limit_points}
+            LIMIT {safe_limit}
         """
 
-        rows, is_cached, status = db_manager.execute_query(sql, cache_key=cache_key)
+        rows, is_cached, status = db_manager.execute_query(sql, params=params, cache_key=cache_key)
 
         points: List[TimeseriesPoint] = []
         for r in rows:

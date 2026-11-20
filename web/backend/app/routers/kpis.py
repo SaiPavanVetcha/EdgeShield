@@ -3,17 +3,9 @@ from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from app.models import KPISummaryResponse
 from app.services.databricks_service import databricks_service
+from app.validation import validate_device_id, validate_room, validate_timestamp
 
 router = APIRouter(prefix="/api/kpis", tags=["kpis"])
-
-
-def normalize_ts(ts: Optional[str], default_dt: datetime) -> str:
-    if not ts:
-        return default_dt.strftime("%Y-%m-%d %H:%M:%S")
-    if ts.lower() == "all":
-        return "2020-01-01 00:00:00"
-    clean = ts.replace("T", " ").replace("Z", "").split(".")[0].strip()
-    return clean
 
 
 @router.get("", response_model=KPISummaryResponse)
@@ -30,10 +22,14 @@ def get_kpis(
     If no data exists for a metric, available=false is returned.
     """
     try:
+        clean_device_id = validate_device_id(device_id)
+        clean_room = validate_room(room)
         now_utc = datetime.now(timezone.utc)
-        start_ts = normalize_ts(from_time, now_utc - timedelta(hours=24))
-        end_ts = normalize_ts(to_time, now_utc)
+        start_ts = validate_timestamp(from_time, now_utc - timedelta(hours=24))
+        end_ts = validate_timestamp(to_time, now_utc)
 
-        return databricks_service.get_kpis(device_id=device_id, from_ts=start_ts, to_ts=end_ts, room=room)
+        return databricks_service.get_kpis(device_id=clean_device_id, from_ts=start_ts, to_ts=end_ts, room=clean_room)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

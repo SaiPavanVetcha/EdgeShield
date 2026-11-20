@@ -1,6 +1,7 @@
 import time
 import logging
 import threading
+import re
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -110,7 +111,26 @@ class DatabaseManager:
             ) as connection:
                 with connection.cursor() as cursor:
                     if params:
-                        cursor.execute(query, params)
+                        try:
+                            cursor.execute(query, params)
+                        except Exception as param_err:
+                            err_str = str(param_err).lower()
+                            # If server or driver rejects native parameter markers (e.g. older DBR or parameter binding disabled)
+                            if any(w in err_str for w in ["parameter", "bind", "unsupported", "syntax error"]):
+                                logger.warning(f"Native parameter execution error ({param_err}); applying safe substitution.")
+                                safe_query = query
+                                for k, v in params.items():
+                                    if isinstance(v, (int, float)):
+                                        val_repr = str(v)
+                                    elif v is None:
+                                        val_repr = "NULL"
+                                    else:
+                                        escaped = str(v).replace("'", "''")
+                                        val_repr = f"'{escaped}'"
+                                    safe_query = re.sub(rf":{k}\b", val_repr, safe_query)
+                                cursor.execute(safe_query)
+                            else:
+                                raise
                     else:
                         cursor.execute(query)
 
