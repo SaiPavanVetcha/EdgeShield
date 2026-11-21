@@ -4,7 +4,7 @@ import os
 import socket
 import time
 from datetime import datetime, timezone
-from typing import Tuple
+from typing import Optional, Tuple
 import requests
 
 from config import (
@@ -29,6 +29,11 @@ from spool import count, delete_ids, enqueue, fetch_batch
 
 # Configure dual logging: console + rotating log file
 logger = logging.getLogger("edgeshield_client")
+
+# HTTP Session management & failure throttling
+_session: Optional[requests.Session] = None
+_consecutive_failures: int = 0
+_FAILURE_LOG_INTERVAL: int = 10  # Log initial failure, then every 10th retry
 
 
 def setup_logging() -> logging.Logger:
@@ -62,11 +67,42 @@ def log(message: str) -> None:
     logger.info(message)
 
 
+def get_session() -> requests.Session:
+    """
+    Returns the active HTTP session, instantiating a fresh one if closed.
+    Ensures connection pools and DNS resolution are fresh after network changes.
+    """
+    global _session
+    if _session is None:
+        _session = requests.Session()
+    return _session
+
+
+def close_session() -> None:
+    """
+    Closes and discards the active HTTP session.
+    Tears down underlying urllib3 sockets and connection pools so the host is
+    re-resolved on the next request (prevents sticky broken sockets after Wi-Fi switches).
+    """
+    global _session
+    if _session is not None:
+        try:
+            _session.close()
+        except Exception:
+            pass
+        _session = None
+
+
 def build_telemetry_payload() -> dict:
     """Aggregates all collector module outputs into a single JSON payload."""
+    try:
+        hostname = socket.gethostname()
+    except Exception:
+        hostname = "unknown-host"
+
     return {
         "device_id": DEVICE_ID,
-        "hostname": socket.gethostname(),
+        "hostname": hostname,
         "room": ROOM,
         "type": "pc_telemetry",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -83,28 +119,57 @@ def build_telemetry_payload() -> dict:
 def send_payload(payload: dict) -> bool:
     """
     Transmits a single telemetry payload over HTTP to the ingestion server.
+    On connection drops, timeouts, or network switches, resets the session
+    so DNS and sockets are cleanly re-established on the next attempt.
+    Throttles failure logging to prevent console flooding.
     Returns True if successfully received (HTTP 2xx), False otherwise.
     """
+    global _consecutive_failures
+    session = get_session()
+
     try:
-        response = requests.post(SERVER_URL, json=payload, timeout=3)
+        response = session.post(SERVER_URL, json=payload, timeout=4)
         response.raise_for_status()
+
+        if _consecutive_failures > 0:
+            log(f"[*] Connection restored to {SERVER_URL}. Resuming spool drain.")
+            _consecutive_failures = 0
+
         return True
+
     except requests.exceptions.Timeout:
-        log(f"[!] Timeout: Server unreachable at {SERVER_URL}")
+        close_session()
+        _consecutive_failures += 1
+        if _consecutive_failures == 1:
+            log(f"[!] Server unreachable at {SERVER_URL} (Timeout). Spooling telemetry locally.")
+        elif _consecutive_failures % _FAILURE_LOG_INTERVAL == 0:
+            log(f"[!] Still unreachable at {SERVER_URL} (retry #{_consecutive_failures}; pending spool: {count()})")
         return False
+
     except requests.exceptions.ConnectionError:
-        log(f"[!] Connection Refused: Server offline at {SERVER_URL}")
+        close_session()
+        _consecutive_failures += 1
+        if _consecutive_failures == 1:
+            log(f"[!] Server unreachable at {SERVER_URL} (Connection Refused / Network Down). Spooling telemetry locally.")
+        elif _consecutive_failures % _FAILURE_LOG_INTERVAL == 0:
+            log(f"[!] Still unreachable at {SERVER_URL} (retry #{_consecutive_failures}; pending spool: {count()})")
         return False
+
     except requests.exceptions.RequestException as err:
-        log(f"[!] Transmission Error: {err}")
+        close_session()
+        _consecutive_failures += 1
+        if _consecutive_failures == 1:
+            log(f"[!] Transmission Error to {SERVER_URL}: {err}. Spooling telemetry locally.")
+        elif _consecutive_failures % _FAILURE_LOG_INTERVAL == 0:
+            log(f"[!] Still failing transmission to {SERVER_URL} (retry #{_consecutive_failures}; pending spool: {count()})")
         return False
 
 
 def flush_spool() -> Tuple[int, int]:
     """
     Drains pending records from the local durable spool and POSTs them to the server.
-    Sends one record per HTTP request to ensure backward compatibility with the ingestion server.
-    Aborts immediately on the first network failure to preserve remaining spool records.
+    Sends one record per HTTP request. Aborts immediately on the first network failure
+    to preserve remaining spool records without hammering the network.
     Returns (sent_count, failed_count).
     """
     total_sent = 0
@@ -130,8 +195,8 @@ def flush_spool() -> Tuple[int, int]:
 
     remaining = count()
     timestamp = datetime.now(timezone.utc).isoformat()
-    if total_sent > 0 or total_failed > 0:
-        log(f"[{timestamp}] Spool flush: {total_sent} sent, {total_failed} failed (pending: {remaining})")
+    if total_sent > 0:
+        log(f"[{timestamp}] Spool flush: {total_sent} sent successfully (pending: {remaining})")
 
     return total_sent, total_failed
 
@@ -158,33 +223,51 @@ def main():
 
     last_collect_time = 0.0
     last_flush_time = time.time()
+    flush_backoff_seconds = FLUSH_INTERVAL_SECONDS
 
     while True:
-        now = time.time()
+        try:
+            now = time.time()
 
-        # 1. Collection cycle: collect telemetry and enqueue into durable spool
-        if now - last_collect_time >= SAMPLING_INTERVAL:
-            last_collect_time = now
-            payload = build_telemetry_payload()
-            enqueue(payload)
+            # 1. Collection cycle: collect telemetry and enqueue into durable spool
+            # Network failures never halt local collection
+            if now - last_collect_time >= SAMPLING_INTERVAL:
+                last_collect_time = now
+                try:
+                    payload = build_telemetry_payload()
+                    enqueue(payload)
+                    pending = count()
+                    log(f"[{payload['timestamp']}] Telemetry collected (pending: {pending})")
+                except Exception as col_err:
+                    log(f"[!] Error during telemetry collection: {col_err}")
+
+            # 2. Flush cycle: flush spool if interval elapsed or pending threshold reached
             pending = count()
-            log(f"[{payload['timestamp']}] Telemetry collected (pending: {pending})")
+            time_since_flush = now - last_flush_time
 
-        # 2. Flush cycle: flush spool if interval elapsed or pending threshold reached
-        pending = count()
-        time_since_flush = now - last_flush_time
+            # Use adaptive backoff when network is failing to avoid aggressive socket churn
+            current_interval = flush_backoff_seconds if last_flush_failed else FLUSH_INTERVAL_SECONDS
 
-        should_flush = False
-        if pending > 0:
-            if time_since_flush >= FLUSH_INTERVAL_SECONDS:
-                should_flush = True
-            elif pending >= FLUSH_MAX_RECORDS and not last_flush_failed:
-                should_flush = True
+            should_flush = False
+            if pending > 0:
+                if time_since_flush >= current_interval:
+                    should_flush = True
+                elif pending >= FLUSH_MAX_RECORDS and not last_flush_failed:
+                    should_flush = True
 
-        if should_flush:
-            sent, failed = flush_spool()
-            last_flush_time = time.time()
-            last_flush_failed = (failed > 0)
+            if should_flush:
+                sent, failed = flush_spool()
+                last_flush_time = time.time()
+                last_flush_failed = (failed > 0)
+
+                if last_flush_failed:
+                    # Exponential backoff up to 30s maximum
+                    flush_backoff_seconds = min(30.0, max(flush_backoff_seconds * 1.5, FLUSH_INTERVAL_SECONDS))
+                else:
+                    flush_backoff_seconds = FLUSH_INTERVAL_SECONDS
+
+        except Exception as loop_err:
+            log(f"[!] Unexpected error in client main loop (resuming): {loop_err}")
 
         time.sleep(0.5)
 
@@ -193,4 +276,5 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
+        close_session()
         log("\n[*] EdgeShield Client Agent stopped by user.")

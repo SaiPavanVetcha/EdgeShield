@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Server,
   Cpu,
@@ -50,42 +50,60 @@ export const App: React.FC = () => {
   // Storage mode confirmation modal state
   const [showConfirmCloudModal, setShowConfirmCloudModal] = useState(false);
 
-  // Live polling controls
+  // Live polling controls & in-flight guards
   const [liveStreamLogs, setLiveStreamLogs] = useState(true);
+  const [isTabVisible, setIsTabVisible] = useState(
+    typeof document !== 'undefined' ? document.visibilityState === 'visible' : true
+  );
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const inFlightStatusRef = useRef(false);
+  const inFlightDevicesRef = useRef(false);
+  const inFlightLogsRef = useRef(false);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4500);
   };
 
-  const fetchStatus = useCallback(async () => {
-    setIsLoadingStatus(true);
+  const fetchStatus = useCallback(async (isManual = false) => {
+    if (inFlightStatusRef.current) return;
+    inFlightStatusRef.current = true;
+    if (isManual) setIsLoadingStatus(true);
     try {
       const data = await consoleApi.getStatus();
       setStatus(data);
+      setLastUpdated(new Date());
     } catch (err: any) {
       console.error('Failed to load status:', err);
     } finally {
       setIsLoadingStatus(false);
+      inFlightStatusRef.current = false;
     }
   }, []);
 
-  const fetchDevices = useCallback(async () => {
-    setIsLoadingDevices(true);
+  const fetchDevices = useCallback(async (isManual = false) => {
+    if (inFlightDevicesRef.current) return;
+    inFlightDevicesRef.current = true;
+    if (isManual) setIsLoadingDevices(true);
     try {
       const data = await consoleApi.getDevices();
       setDevices(data.devices || []);
       setDeviceTotal(data.total || 0);
       setDeviceOnline(data.online || 0);
+      setLastUpdated(new Date());
     } catch (err: any) {
       console.error('Failed to load devices:', err);
     } finally {
       setIsLoadingDevices(false);
+      inFlightDevicesRef.current = false;
     }
   }, []);
 
-  const fetchLogs = useCallback(async () => {
-    setIsLoadingLogs(true);
+  const fetchLogs = useCallback(async (isManual = false) => {
+    if (inFlightLogsRef.current) return;
+    inFlightLogsRef.current = true;
+    if (isManual) setIsLoadingLogs(true);
     try {
       const data = await consoleApi.getLogs(200);
       setLogs(data.logs || []);
@@ -93,11 +111,12 @@ export const App: React.FC = () => {
       console.error('Failed to load logs:', err);
     } finally {
       setIsLoadingLogs(false);
+      inFlightLogsRef.current = false;
     }
   }, []);
 
   const handleRefreshAll = useCallback(async () => {
-    await Promise.all([fetchStatus(), fetchDevices(), fetchLogs()]);
+    await Promise.all([fetchStatus(true), fetchDevices(true), fetchLogs(true)]);
   }, [fetchStatus, fetchDevices, fetchLogs]);
 
   // Initial load
@@ -105,23 +124,38 @@ export const App: React.FC = () => {
     handleRefreshAll();
   }, [handleRefreshAll]);
 
-  // Status background poll every 4 seconds
+  // Visibility change listener: pause polling when hidden, resume immediately when visible
   useEffect(() => {
-    const timer = setInterval(() => {
-      fetchStatus();
-      if (activeTab === 'devices') fetchDevices();
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [activeTab, fetchStatus, fetchDevices]);
+    const onVisibilityChange = () => {
+      const visible = document.visibilityState === 'visible';
+      setIsTabVisible(visible);
+      if (visible) {
+        fetchStatus();
+        fetchDevices();
+        if (activeTab === 'logs') fetchLogs();
+      }
+    };
 
-  // Live stream logs poll every 2.5 seconds when active
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [fetchStatus, fetchDevices, fetchLogs, activeTab]);
+
+  // Status & Devices background auto-polling every 4 seconds (single in-flight request per endpoint)
   useEffect(() => {
-    if (!liveStreamLogs || activeTab !== 'logs') return;
     const timer = setInterval(() => {
-      fetchLogs();
-    }, 2500);
+      // Pause polling when browser tab is hidden
+      if (document.visibilityState === 'hidden') return;
+
+      fetchStatus();
+      fetchDevices();
+
+      if (activeTab === 'logs' && liveStreamLogs) {
+        fetchLogs();
+      }
+    }, 4000);
+
     return () => clearInterval(timer);
-  }, [liveStreamLogs, activeTab, fetchLogs]);
+  }, [fetchStatus, fetchDevices, fetchLogs, activeTab, liveStreamLogs]);
 
   const executeSwitchMode = async (targetMode: 'local' | 'databricks') => {
     setIsSwitchingMode(true);
@@ -161,7 +195,7 @@ export const App: React.FC = () => {
       const res = await consoleApi.triggerFlush();
       setLastFlushResult(res);
       showNotification('success', res.message || 'Flush cycle triggered successfully');
-      await Promise.all([fetchStatus(), fetchDevices(), fetchLogs()]);
+      await Promise.all([fetchStatus(true), fetchDevices(true), fetchLogs(true)]);
       return res;
     } catch (err: any) {
       showNotification('error', err.message || 'Flush cycle failed');
@@ -227,6 +261,25 @@ export const App: React.FC = () => {
               Online
             </div>
 
+            {/* Live Auto-Refresh & Last Updated Indicator */}
+            <div className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono bg-slate-900 border border-slate-800 text-slate-300">
+              {isTabVisible ? (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-emerald-400 font-semibold">Live</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  <span className="text-amber-400 font-semibold">Paused</span>
+                </>
+              )}
+              <span className="text-slate-600">&bull;</span>
+              <span className="text-[11px] text-slate-400" title={lastUpdated ? lastUpdated.toISOString() : undefined}>
+                {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Syncing...'}
+              </span>
+            </div>
+
             {/* Segmented Storage Mode Control */}
             <div className="inline-flex p-0.5 bg-slate-900 border border-slate-700/80 rounded-lg">
               <button
@@ -260,11 +313,11 @@ export const App: React.FC = () => {
             {/* Refresh All Button */}
             <button
               onClick={handleRefreshAll}
-              disabled={isLoadingStatus}
+              disabled={isLoadingStatus || isLoadingDevices}
               className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 transition-colors disabled:opacity-50"
-              title="Refresh all data"
+              title="Manual Refresh"
             >
-              <RotateCw className={`w-4 h-4 ${isLoadingStatus ? 'animate-spin text-sky-400' : ''}`} />
+              <RotateCw className={`w-4 h-4 ${isLoadingStatus || isLoadingDevices ? 'animate-spin text-sky-400' : ''}`} />
             </button>
 
             {/* External Link to Landing */}
