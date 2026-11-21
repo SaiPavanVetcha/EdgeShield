@@ -40,6 +40,7 @@ export const DashboardPage: React.FC = () => {
     selectedRoom,
     setSelectedRoom,
     distinctRooms,
+    hasUnassignedDevices,
     timeRange,
     handleSelectPreset,
     handleApplyCustomRange,
@@ -293,6 +294,7 @@ export const DashboardPage: React.FC = () => {
         selectedRoom={selectedRoom}
         onSelectRoom={setSelectedRoom}
         distinctRooms={distinctRooms}
+        hasUnassignedDevices={hasUnassignedDevices}
         timeRange={timeRange}
         onChangePreset={handleSelectPreset}
         onApplyCustomRange={handleApplyCustomRange}
@@ -317,18 +319,30 @@ export const DashboardPage: React.FC = () => {
                 {selectedDeviceId === 'all'
                   ? selectedRoom === 'all'
                     ? 'Fleet Telemetry Overview'
-                    : `Fleet Telemetry (${selectedRoom})`
+                    : selectedRoom.toLowerCase() === 'unassigned'
+                    ? 'Room Analytics — Unassigned'
+                    : `Room Analytics — ${selectedRoom}`
                   : `Device: ${selectedDevice?.hostname || selectedDeviceId}`}
               </h1>
-              {selectedDeviceId !== 'all' && selectedDevice?.room && (
-                <span className="inline-flex items-center gap-1 text-xs font-mono font-medium px-2 py-0.5 rounded bg-sky-950/80 text-sky-300 border border-sky-800/60">
-                  <MapPin className="w-3 h-3 text-amber-400" />
-                  {selectedDevice.room}
+              {selectedDeviceId !== 'all' && (
+                <span className={`inline-flex items-center gap-1 text-xs font-mono font-medium px-2 py-0.5 rounded border ${
+                  selectedDevice?.room
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  <MapPin className={`w-3 h-3 ${selectedDevice?.room ? 'text-amber-400' : 'text-slate-500'}`} />
+                  {selectedDevice?.room || 'Unassigned'}
                 </span>
               )}
             </div>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Live observability powered by Databricks Gold Layer (edgeshield_lakehouse.gold)
+              {selectedDeviceId === 'all'
+                ? selectedRoom === 'all'
+                  ? 'Live observability powered by Databricks Gold Layer (edgeshield_lakehouse.gold)'
+                  : selectedRoom.toLowerCase() === 'unassigned'
+                  ? 'Aggregated telemetry and KPI performance for edge devices without an assigned physical room'
+                  : `Aggregated telemetry and KPI performance for devices located in ${selectedRoom}`
+                : 'Live telemetry stream and performance diagnostics for individual edge node'}
             </p>
           </div>
         </div>

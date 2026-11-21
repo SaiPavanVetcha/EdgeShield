@@ -69,6 +69,7 @@ spool/
 client/spool/
 server/spool/
 server/data/
+web/backend/app/data/
 *.db
 *.db-wal
 *.db-shm

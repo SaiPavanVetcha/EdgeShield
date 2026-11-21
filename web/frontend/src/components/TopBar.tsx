@@ -18,6 +18,7 @@ interface TopBarProps {
   selectedRoom?: string;
   onSelectRoom?: (room: string) => void;
   distinctRooms?: string[];
+  hasUnassignedDevices?: boolean;
   timeRange: TimeRangeState;
   onChangePreset: (preset: PresetTimeRange) => void;
   onApplyCustomRange: (from: string, to: string) => void;
@@ -33,6 +34,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   selectedRoom = 'all',
   onSelectRoom,
   distinctRooms = [],
+  hasUnassignedDevices,
   timeRange,
   onChangePreset,
   onApplyCustomRange,
@@ -71,15 +73,24 @@ export const TopBar: React.FC<TopBarProps> = ({
   };
 
   const visibleDevices = selectedRoom && selectedRoom !== 'all'
-    ? devices.filter((d) => (d.room || '').trim() === selectedRoom.trim())
+    ? selectedRoom.toLowerCase() === 'unassigned'
+      ? devices.filter((d) => !d.room || d.room.trim() === '')
+      : devices.filter((d) => (d.room || '').trim().toLowerCase() === selectedRoom.trim().toLowerCase())
     : devices;
+
+  const roomDisplayLabel =
+    selectedRoom === 'all'
+      ? 'All Rooms'
+      : selectedRoom.toLowerCase() === 'unassigned'
+      ? 'Unassigned'
+      : selectedRoom;
 
   return (
     <div className="bg-[#0b1021]/90 backdrop-blur-md border-b border-slate-800/80 px-6 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20">
       {/* Left: Room & Device Selectors */}
       <div className="flex items-center gap-2.5">
         {/* Room Filter Selector */}
-        {distinctRooms && distinctRooms.length > 0 && onSelectRoom && (
+        {((distinctRooms && distinctRooms.length > 0) || hasUnassignedDevices) && onSelectRoom && (
           <div className="relative">
             <button
               onClick={() => {
@@ -90,7 +101,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700/80 text-sm font-medium text-slate-100 hover:border-slate-600 transition-colors"
             >
               <MapPin className="w-3.5 h-3.5 text-amber-400" />
-              <span>{selectedRoom === 'all' ? 'All Rooms' : selectedRoom}</span>
+              <span>{roomDisplayLabel}</span>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </button>
 
@@ -131,6 +142,20 @@ export const TopBar: React.FC<TopBarProps> = ({
                       {selectedRoom === r && <Check className="w-3.5 h-3.5 text-amber-400" />}
                     </button>
                   ))}
+                  <button
+                    onClick={() => {
+                      onSelectRoom('unassigned');
+                      setRoomDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium hover:bg-slate-800/80 transition-colors border-t border-slate-800 ${
+                      selectedRoom.toLowerCase() === 'unassigned'
+                        ? 'text-amber-400 bg-slate-800/40'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="truncate">Unassigned (No Room)</span>
+                    {selectedRoom.toLowerCase() === 'unassigned' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                  </button>
                 </div>
               </>
             )}
@@ -151,13 +176,19 @@ export const TopBar: React.FC<TopBarProps> = ({
             <span>
               {selectedDeviceId === 'all'
                 ? selectedRoom && selectedRoom !== 'all'
-                  ? `All in ${selectedRoom}`
+                  ? selectedRoom.toLowerCase() === 'unassigned'
+                    ? 'All Unassigned Devices'
+                    : `All in ${selectedRoom}`
                   : 'All Devices (Fleet)'
                 : selectedDevice?.hostname || selectedDeviceId}
             </span>
-            {selectedDeviceId !== 'all' && selectedDevice?.room && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-300 border border-sky-800/60 font-mono">
-                {selectedDevice.room}
+            {selectedDeviceId !== 'all' && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                selectedDevice?.room
+                  ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+              }`}>
+                {selectedDevice?.room || 'Unassigned'}
               </span>
             )}
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />

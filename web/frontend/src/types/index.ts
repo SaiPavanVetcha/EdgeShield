@@ -86,6 +86,7 @@ export interface AlertItem {
   id: string;
   device_id: string;
   hostname: string;
+  room?: string | null;
   metric: string;
   severity: 'critical' | 'warning' | 'info';
   rule_name: string;
@@ -95,6 +96,23 @@ export interface AlertItem {
   triggered_at: string;
   acknowledged: boolean;
   acknowledged_at?: string | null;
+}
+
+export interface AlertThresholds {
+  cpu_pct: number;
+  ram_pct: number;
+  disk_pct: number;
+  temperature_c: number;
+  battery_pct: number;
+  battery_health_pct: number;
+  offline_minutes: number;
+}
+
+export interface AlertSettingsResponse {
+  scope: string;
+  thresholds: AlertThresholds;
+  is_custom: boolean;
+  available_scopes: string[];
 }
 
 export interface AlertListResponse {

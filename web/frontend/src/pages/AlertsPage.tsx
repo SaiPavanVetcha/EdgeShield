@@ -7,12 +7,21 @@ import {
   Clock,
   Check,
   Info,
+  MapPin,
 } from 'lucide-react';
 import { useTelemetry } from '../hooks/useTelemetry';
 import { AlertItem } from '../types';
 
 export const AlertsPage: React.FC = () => {
-  const { alerts, handleAcknowledgeAlert, refreshAll } = useTelemetry();
+  const {
+    alerts,
+    handleAcknowledgeAlert,
+    refreshAll,
+    selectedRoom,
+    setSelectedRoom,
+    distinctRooms,
+    hasUnassignedDevices,
+  } = useTelemetry();
   const [filterTab, setFilterTab] = useState<'active' | 'acknowledged' | 'all'>('active');
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
 
@@ -35,14 +44,24 @@ export const AlertsPage: React.FC = () => {
     }
   };
 
+  const roomTitleSuffix =
+    selectedRoom === 'all'
+      ? ''
+      : selectedRoom.toLowerCase() === 'unassigned'
+      ? ' (Unassigned Devices)'
+      : ` (${selectedRoom})`;
+
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-[#090d16] overflow-y-auto p-6 max-w-7xl w-full mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-100 tracking-tight">Active Fleet Alerts</h1>
+          <h1 className="text-xl font-bold text-slate-100 tracking-tight">
+            Active Fleet Alerts{roomTitleSuffix}
+          </h1>
           <p className="text-xs text-slate-400 mt-0.5">
             Rule-based threshold violations evaluated in real-time across edge telemetry
+            {selectedRoom !== 'all' ? ` scoped to ${selectedRoom}` : ''}
           </p>
         </div>
       </div>
@@ -102,33 +121,81 @@ export const AlertsPage: React.FC = () => {
       <div className="bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-4 text-xs text-slate-400">
         <div className="flex items-center gap-2 font-medium text-slate-200 mb-2">
           <Info className="w-4 h-4 text-sky-400" />
-          <span>Active Rules Engine (V1 Heuristics)</span>
+          <span>Active Rules Engine (V1 Heuristics & Scoped Overrides)</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 text-[11px] font-mono">
-          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">CPU &gt; 85% sustained</span>
-          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">RAM &gt; 90%</span>
-          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">Disk &gt; 90%</span>
-          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">Temp &gt; 35°C</span>
-          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">Offline &gt; 3 min</span>
-          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">Battery &lt; 20%</span>
+          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">CPU &gt; Sustained</span>
+          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">RAM &gt; Threshold</span>
+          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">Disk &gt; Threshold</span>
+          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">Temp &gt; Threshold</span>
+          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">Offline &gt; Inactivity</span>
+          <span className="bg-slate-900 px-2 py-1 rounded border border-slate-800">Battery &lt; Level / Health</span>
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-        {(['active', 'acknowledged', 'all'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setFilterTab(tab)}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
-              filterTab === tab
-                ? 'bg-sky-500 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            {tab} Alerts ({tab === 'all' ? alertList.length : tab === 'active' ? alerts?.active_count || 0 : alertList.filter((a) => a.acknowledged).length})
-          </button>
-        ))}
+      {/* Filter Tabs & Room Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+        {/* Status Filter Tabs */}
+        <div className="flex items-center gap-2">
+          {(['active', 'acknowledged', 'all'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFilterTab(tab)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
+                filterTab === tab
+                  ? 'bg-sky-500 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              {tab} Alerts ({tab === 'all' ? alertList.length : tab === 'active' ? alerts?.active_count || 0 : alertList.filter((a) => a.acknowledged).length})
+            </button>
+          ))}
+        </div>
+
+        {/* Room Filter Selector */}
+        {((distinctRooms && distinctRooms.length > 0) || hasUnassignedDevices) && (
+          <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-lg border border-slate-800 text-xs">
+            <span className="text-[11px] font-medium text-slate-400 px-2 flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-amber-400" />
+              Room:
+            </span>
+            <button
+              onClick={() => setSelectedRoom('all')}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                selectedRoom === 'all'
+                  ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              All
+            </button>
+            {distinctRooms.map((r) => (
+              <button
+                key={r}
+                onClick={() => setSelectedRoom(r)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  selectedRoom === r
+                    ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+            {hasUnassignedDevices && (
+              <button
+                onClick={() => setSelectedRoom('unassigned')}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  selectedRoom.toLowerCase() === 'unassigned'
+                    ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Unassigned
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Alerts Table */}
@@ -140,6 +207,7 @@ export const AlertsPage: React.FC = () => {
                 <th className="py-3 px-4">Severity</th>
                 <th className="py-3 px-4">Rule & Message</th>
                 <th className="py-3 px-4">Target Device</th>
+                <th className="py-3 px-4">Room</th>
                 <th className="py-3 px-4">Current Value / Threshold</th>
                 <th className="py-3 px-4">Trigger Time</th>
                 <th className="py-3 px-4">Status</th>
@@ -149,9 +217,9 @@ export const AlertsPage: React.FC = () => {
             <tbody className="divide-y divide-slate-800/60">
               {filteredAlerts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
                     <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-80" />
-                    <span>No {filterTab} alerts reported by rules engine.</span>
+                    <span>No {filterTab} alerts reported by rules engine{selectedRoom !== 'all' ? ` for ${selectedRoom}` : ''}.</span>
                   </td>
                 </tr>
               ) : (
@@ -180,6 +248,18 @@ export const AlertsPage: React.FC = () => {
                     <td className="py-3.5 px-4">
                       <div className="font-medium text-slate-200">{alert.hostname}</div>
                       <div className="font-mono text-[10px] text-slate-500">{alert.device_id}</div>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {alert.room ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          <MapPin className="w-3 h-3 text-amber-400" />
+                          {alert.room}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono text-slate-400 bg-slate-800/80 border border-slate-700/80">
+                          Unassigned
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 font-mono text-[11px]">
                       <div className="text-slate-200 font-semibold">{alert.current_value}</div>

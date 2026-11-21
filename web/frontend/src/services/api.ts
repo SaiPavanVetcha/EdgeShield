@@ -4,6 +4,8 @@ import {
   TimeseriesResponse,
   AlertListResponse,
   HealthResponse,
+  AlertThresholds,
+  AlertSettingsResponse,
 } from '../types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -64,8 +66,30 @@ export const api = {
     return fetchJson<TimeseriesResponse>(`/api/timeseries?${params.toString()}`);
   },
 
-  async getAlerts(): Promise<AlertListResponse> {
-    return fetchJson<AlertListResponse>('/api/alerts');
+  async getAlerts(room?: string): Promise<AlertListResponse> {
+    const params = new URLSearchParams();
+    if (room && room !== 'all') params.set('room', room);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return fetchJson<AlertListResponse>(`/api/alerts${query}`);
+  },
+
+  async getAlertSettings(scope: string = 'global'): Promise<AlertSettingsResponse> {
+    const params = new URLSearchParams({ scope });
+    return fetchJson<AlertSettingsResponse>(`/api/settings/alerts?${params.toString()}`);
+  },
+
+  async updateAlertSettings(scope: string, thresholds: AlertThresholds): Promise<AlertSettingsResponse> {
+    return fetchJson<AlertSettingsResponse>('/api/settings/alerts', {
+      method: 'POST',
+      body: JSON.stringify({ scope, thresholds }),
+    });
+  },
+
+  async resetAlertSettings(scope: string): Promise<AlertSettingsResponse> {
+    return fetchJson<AlertSettingsResponse>('/api/settings/alerts/reset', {
+      method: 'POST',
+      body: JSON.stringify({ scope }),
+    });
   },
 
   async acknowledgeAlert(alertId: string): Promise<{ status: string; alert_id: string; acknowledged: boolean }> {

@@ -2,7 +2,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import devices, kpis, timeseries, alerts, health
+from app.routers import devices, kpis, timeseries, alerts, health, settings as settings_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,6 +31,7 @@ app.include_router(devices.router)
 app.include_router(kpis.router)
 app.include_router(timeseries.router)
 app.include_router(alerts.router)
+app.include_router(settings_router.router)
 app.include_router(health.router)
 
 

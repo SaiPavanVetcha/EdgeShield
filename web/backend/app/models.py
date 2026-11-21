@@ -89,6 +89,7 @@ class AlertItem(BaseModel):
     id: str
     device_id: str
     hostname: str
+    room: Optional[str] = None
     metric: str
     severity: str  # "critical" | "warning" | "info"
     rule_name: str
@@ -112,6 +113,32 @@ class AlertListResponse(BaseModel):
 
 class AlertAcknowledgeRequest(BaseModel):
     acknowledged: bool = True
+
+
+class AlertThresholds(BaseModel):
+    cpu_pct: float = Field(default=85.0, ge=10.0, le=100.0)
+    ram_pct: float = Field(default=90.0, ge=10.0, le=100.0)
+    disk_pct: float = Field(default=90.0, ge=10.0, le=100.0)
+    temperature_c: float = Field(default=35.0, ge=0.0, le=100.0)
+    battery_pct: float = Field(default=20.0, ge=1.0, le=100.0)
+    battery_health_pct: float = Field(default=60.0, ge=1.0, le=100.0)
+    offline_minutes: float = Field(default=3.0, ge=0.5, le=1440.0)
+
+
+class AlertSettingsResponse(BaseModel):
+    scope: str  # "global" or room name
+    thresholds: AlertThresholds
+    is_custom: bool = False
+    available_scopes: List[str] = ["global"]
+
+
+class UpdateAlertThresholdsRequest(BaseModel):
+    scope: str = "global"
+    thresholds: AlertThresholds
+
+
+class ResetAlertThresholdsRequest(BaseModel):
+    scope: str = "global"
 
 
 class HealthResponse(BaseModel):

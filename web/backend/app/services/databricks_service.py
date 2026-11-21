@@ -88,7 +88,10 @@ class DatabricksService:
 
         if safe_room and safe_room != "all":
             # Validation safety layer: in-memory room filtering with normalized, validated room string
-            dim_rows = [r for r in dim_rows if (r.get("room") or "").strip() == safe_room.strip()]
+            if safe_room.lower() == "unassigned":
+                dim_rows = [r for r in dim_rows if not (r.get("room") or "").strip()]
+            else:
+                dim_rows = [r for r in dim_rows if (r.get("room") or "").strip().lower() == safe_room.strip().lower()]
 
         # 2. Get latest event_timestamp per device to calculate last_seen and online status
         sql_last_seen = f"""
@@ -239,8 +242,12 @@ class DatabricksService:
                 device_key = self._resolve_device_key(safe_dev_id)
                 device_name = safe_dev_id
         elif safe_room and safe_room != "all":
-            device_name = f"Fleet Overview ({safe_room})"
-            resolved_room = safe_room
+            if safe_room.lower() == "unassigned":
+                device_name = "Fleet Overview (Unassigned)"
+                resolved_room = "Unassigned"
+            else:
+                device_name = f"Fleet Overview ({safe_room})"
+                resolved_room = safe_room
 
         base_conds = []
         params: Dict[str, Any] = {}
@@ -250,9 +257,12 @@ class DatabricksService:
             base_conds.append("device_key = :device_key")
             params["device_key"] = device_key
         elif safe_room and safe_room != "all":
-            # Parameterized subquery: room is passed as named parameter :room
-            base_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = :room)")
-            params["room"] = safe_room
+            if safe_room.lower() == "unassigned":
+                base_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room IS NULL OR TRIM(room) = '')")
+            else:
+                # Parameterized subquery: room is passed as named parameter :room
+                base_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = :room)")
+                params["room"] = safe_room
 
         if safe_from_ts and safe_from_ts > "2020-01-01 00:00:00":
             # Parameterized time bounds: ISO-8601 strings validated and bound as :from_ts, :to_ts
@@ -477,9 +487,12 @@ class DatabricksService:
             where_conds.append("device_key = :device_key")
             params["device_key"] = device_key
         elif safe_room and safe_room != "all":
-            # Parameterized subquery: room passed as named parameter :room
-            where_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = :room)")
-            params["room"] = safe_room
+            if safe_room.lower() == "unassigned":
+                where_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room IS NULL OR TRIM(room) = '')")
+            else:
+                # Parameterized subquery: room passed as named parameter :room
+                where_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = :room)")
+                params["room"] = safe_room
 
         if safe_metric == "battery":
             # Battery gating: exclude records where battery is absent

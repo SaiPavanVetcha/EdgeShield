@@ -35,13 +35,23 @@ export function useTelemetry() {
       setSelectedRoomState(room);
       if (room !== 'all' && selectedDeviceId !== 'all') {
         const dev = devices.find((d) => d.device_id === selectedDeviceId);
-        if (!dev || (dev.room || '').trim() !== room.trim()) {
-          setSelectedDeviceId('all');
+        if (room.toLowerCase() === 'unassigned') {
+          if (!dev || (dev.room && dev.room.trim() !== '')) {
+            setSelectedDeviceId('all');
+          }
+        } else {
+          if (!dev || (dev.room || '').trim().toLowerCase() !== room.trim().toLowerCase()) {
+            setSelectedDeviceId('all');
+          }
         }
       }
     },
     [devices, selectedDeviceId]
   );
+
+  const hasUnassignedDevices = useMemo(() => {
+    return devices.some((d) => !d.room || d.room.trim() === '');
+  }, [devices]);
 
   // Time range calculation helper
   const calculatePresetRange = (preset: PresetTimeRange): { from: string; to: string } => {
@@ -93,15 +103,16 @@ export function useTelemetry() {
     }
   }, []);
 
-  const fetchAlerts = useCallback(async () => {
+  const fetchAlerts = useCallback(async (roomOverride?: string) => {
     try {
-      const res = await api.getAlerts();
+      const targetRoom = roomOverride !== undefined ? roomOverride : selectedRoom;
+      const res = await api.getAlerts(targetRoom);
       setAlerts(res);
       if (res.warehouse_status) setWarehouseStatus(res.warehouse_status);
     } catch {
       // silent fallback
     }
-  }, []);
+  }, [selectedRoom]);
 
   const fetchTelemetry = useCallback(async () => {
     setIsLoading(true);
@@ -139,6 +150,11 @@ export function useTelemetry() {
   useEffect(() => {
     refreshAll();
   }, [refreshAll]);
+
+  // Re-fetch alerts when room filter changes
+  useEffect(() => {
+    fetchAlerts(selectedRoom);
+  }, [selectedRoom, fetchAlerts]);
 
   // Polling loop when warehouse is waking up
   useEffect(() => {
@@ -206,6 +222,8 @@ export function useTelemetry() {
     warehouseStatus,
     isCached,
     refreshAll,
+    fetchAlerts,
+    hasUnassignedDevices,
     handleWakeUpWarehouse,
     handleAcknowledgeAlert,
   };
