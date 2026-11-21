@@ -70,16 +70,54 @@ The service will start listening on `http://0.0.0.0:5000`.
 
 ---
 
-## Server Console & Operations UI
+## Server Console & Operations UI (React + Vite)
 
-The ingestion server provides a lightweight, dependency-free web console for operators:
+The Central Ingestion Server includes a dedicated, dark ops control plane interface built with **Vite, React, and TypeScript** in [`server/console-ui/`](console-ui/):
 
-* **Landing Page (`http://localhost:5000`):** Modern status landing page displaying server online state, active storage mode, pending spool records, connected device count, and a direct CTA to open the console.
-* **Operational Console (`http://localhost:5000/console`):** Tabbed control interface:
-  * **Overview Tab:** System uptime, storage mode switcher (toggle between `local` and `databricks`), spool summary, and last flush status.
-  * **Devices Tab:** Live registry of all endpoints sending telemetry (device ID, hostname, platform, assigned room, client IP, last seen timestamp, and online/offline status badge).
-  * **Spool Tab:** Pending queue metrics, capacity limits, and a **"Flush Now"** manual trigger.
-  * **Logs Tab:** Live auto-refreshing log tail from the server's in-memory ring buffer.
+* **Landing Page (`http://localhost:5000/`):** Clean product-level entry point with operational status pills (Server online, Spool pending, Online/total devices, Storage mode), system bind information, and direct CTA to open the console.
+* **Operational Console (`http://localhost:5000/console`):** React SPA served directly by FastAPI from `server/static/console/`:
+  * **Overview Tab:** System host/port, server uptime, runtime storage mode switcher (instant toggle between `local` and `databricks`), spool buffer status, connected device counts, and last cloud flush diagnostics.
+  * **Devices Tab:** Live table of all registered edge nodes (Device ID, hostname, telemetry type, OS platform, physical room badge with "Unassigned" fallback, client IP, last seen relative/absolute timestamp, payload counts, and online/offline status).
+  * **Spool Tab:** SQLite queue metrics, capacity utilization bar, batching parameters, and a **"Flush Now"** manual trigger button with detailed outcome reporting.
+  * **Logs Tab:** Live auto-refreshing terminal-style log tail streaming from the server's in-memory ring buffer with level filtering (`INFO`, `WARNING`, `ERROR`), text search, and auto-scroll.
+
+### UI Development & Build Workflow
+
+The React console source code lives in [`server/console-ui/`](console-ui/) and compiles to static assets served by FastAPI at `server/static/console/`:
+
+1. **Development Server (Hot Reload + Proxy):**
+   ```bash
+   cd server/console-ui
+   npm run dev
+   ```
+   Starts Vite on `http://localhost:5174/console/` with automatic API proxying to FastAPI backend on `http://localhost:5000`.
+
+2. **Production Build:**
+   ```bash
+   cd server/console-ui
+   npm run build
+   ```
+   Outputs minified assets directly to [`server/static/console/`](static/console/).
+
+3. **Production Serving:**
+   ```bash
+   cd server
+   python server.py
+   ```
+   FastAPI mounts `/console/assets` and serves the compiled single-page application at `/console` while preserving all JSON APIs under `/api/console/*`. (If assets are not yet built, it automatically falls back to an embedded lightweight HTML view).
+
+---
+
+## Interactive Demo Click-Path
+
+Follow this step-by-step path to demonstrate the Server Console capabilities:
+
+1. **Landing Entry (`GET /`):** Navigate to `http://localhost:5000`. Review the live operational status pills (Server Online, Spool Pending, Active Devices, and Storage Mode). Click **"Open Ops Console"**.
+2. **Console Overview (`GET /console`):** Review the 6-card metrics grid (Uptime, Storage Mode, Spool Pending, Devices Online/Total, Last Flush Status, Databricks Credentials Configured).
+3. **Mode Toggle:** In the **Storage Mode Control Plane** card, click **"Switch to Local Mode"** (or Databricks). Observe the runtime mode switch instantly without wiping spooled records.
+4. **Devices Registry:** Click the **Devices** tab. Inspect connected edge endpoints, filter by search or online/offline status, and observe physical room tags (e.g. `Lab-101` or `Unassigned`).
+5. **Spool Management & Manual Flush:** Switch to the **Spool Queue** tab. Review pending records and queue capacity limits. Click **"Flush Now"** to trigger an immediate flush cycle and observe the detailed success banner.
+6. **Live Terminal Logs:** Click the **Logs** tab. Enable **Live Stream** to watch real-time server logs, filter by level (`INFO`, `WARNING`, `ERROR`), or search for specific device IDs.
 
 ---
 

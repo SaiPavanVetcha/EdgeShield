@@ -351,16 +351,28 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         body = resp.body.decode("utf-8")
         self.assertIn("EdgeShield Server Console", body)
-        self.assertIn("tab-overview", body)
-        self.assertIn("tab-devices", body)
-        self.assertIn("tab-spool", body)
-        self.assertIn("tab-logs", body)
-        self.assertIn("btn-flush-now", body)
-        self.assertIn("btn-mode-local", body)
-        self.assertIn("btn-mode-databricks", body)
-        self.assertIn("badge-unassigned", body)
-        self.assertIn("chk-auto-logs", body)
-        self.assertIn("mode-help-text", body)
+        self.assertTrue("assets/index" in body or "tab-overview" in body)
+
+        # Also verify embedded fallback view maintains all tab identifiers
+        fallback_html = server.render_console_html()
+        self.assertIn("tab-overview", fallback_html)
+        self.assertIn("tab-devices", fallback_html)
+        self.assertIn("tab-spool", fallback_html)
+        self.assertIn("tab-logs", fallback_html)
+        self.assertIn("btn-flush-now", fallback_html)
+        self.assertIn("btn-mode-local", fallback_html)
+        self.assertIn("btn-mode-databricks", fallback_html)
+        self.assertIn("badge-unassigned", fallback_html)
+        self.assertIn("chk-auto-logs", fallback_html)
+        self.assertIn("mode-help-text", fallback_html)
+
+    def test_console_react_spa_serving(self):
+        resp = server.console_view()
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/html", resp.media_type)
+        body = resp.body.decode("utf-8")
+        self.assertIn("EdgeShield Server Console", body)
+        self.assertIn("root", body)
 
 
 if __name__ == "__main__":

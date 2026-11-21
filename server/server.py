@@ -23,7 +23,8 @@ from database import (
     stop_flush_worker,
 )
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from log_buffer import attach_log_buffer
 from routes.console_api import router as console_router, get_console_status
 from routes.console_views import render_console_html, render_landing_html
@@ -61,9 +62,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Register routes
+# Register API routes
 app.include_router(metrics_router)
 app.include_router(console_router)
+
+# Static assets directory for built Server Console SPA
+CONSOLE_STATIC_DIR = os.path.join(BASE_DIR, "static", "console")
+CONSOLE_ASSETS_DIR = os.path.join(CONSOLE_STATIC_DIR, "assets")
+os.makedirs(CONSOLE_ASSETS_DIR, exist_ok=True)
+
+# Mount Vite static assets for the React SPA
+app.mount("/console/assets", StaticFiles(directory=CONSOLE_ASSETS_DIR), name="console_assets")
 
 
 def _build_health_json():
@@ -90,8 +99,16 @@ def health_check():
 
 
 @app.get("/console", response_class=HTMLResponse)
-def console_view():
-    """Ops Console UI displaying registered devices and telemetry stream."""
+@app.get("/console/{full_path:path}", response_class=HTMLResponse)
+def console_view(full_path: str = ""):
+    """
+    Ops Console UI displaying registered devices, spool queue, and logs.
+    Serves the high-fidelity React SPA build when present, falling back to embedded HTML view.
+    """
+    index_file = os.path.join(CONSOLE_STATIC_DIR, "index.html")
+    if os.path.exists(index_file):
+        with open(index_file, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
     return HTMLResponse(content=render_console_html())
 
 
