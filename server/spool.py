@@ -16,38 +16,79 @@ def get_db_path() -> str:
     return os.path.join(SPOOL_DIR, "server_spool.db")
 
 
+def _recreate_corrupt_db(path: str, err: Exception) -> None:
+    """Removes corrupt database files and recreates a clean spool database."""
+    print(f"[!] Warning: Spool database at {path} was corrupted ({err}). Recreating cleanly.")
+    for ext in ("", "-wal", "-shm"):
+        target = path + ext
+        if os.path.exists(target):
+            try:
+                os.remove(target)
+            except Exception as rm_err:
+                print(f"[!] Could not remove {target}: {rm_err}")
+    init_db(path, force=True)
+
+
 @contextmanager
 def get_connection(db_path: Optional[str] = None):
-    """Context manager for SQLite connections with WAL journal mode enabled."""
-    ensure_initialized(db_path)
+    """Context manager for SQLite connections with WAL journal mode and auto-corruption recovery."""
     path = db_path or get_db_path()
-    conn = sqlite3.connect(path, timeout=10.0)
+    ensure_initialized(path)
+
+    conn = None
+    try:
+        conn = sqlite3.connect(path, timeout=30.0)
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        # Probe DB header and table existence to catch corruption immediately
+        conn.execute("SELECT 1 FROM spool LIMIT 1;")
+    except sqlite3.DatabaseError as err:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        _recreate_corrupt_db(path, err)
+        conn = sqlite3.connect(path, timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout = 5000;")
+
     try:
         yield conn
     finally:
-        conn.close()
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
-def init_db(db_path: Optional[str] = None) -> None:
+def init_db(db_path: Optional[str] = None, force: bool = False) -> None:
     """Initializes the SQLite server spool database and creates required tables."""
     path = db_path or get_db_path()
     os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
 
-    conn = sqlite3.connect(path, timeout=10.0)
     try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS spool (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                created_at TEXT NOT NULL,
-                payload_json TEXT NOT NULL
-            );
-            """
-        )
-        conn.commit()
-    finally:
-        conn.close()
+        conn = sqlite3.connect(path, timeout=30.0)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA busy_timeout = 5000;")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS spool (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError as err:
+        if not force:
+            _recreate_corrupt_db(path, err)
+        else:
+            raise
 
 
 def ensure_initialized(db_path: Optional[str] = None) -> None:

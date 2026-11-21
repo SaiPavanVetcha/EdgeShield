@@ -10,55 +10,65 @@ import {
 import { RegisteredDevice } from '../types';
 
 interface DevicesTabProps {
-  devices: RegisteredDevice[];
-  total: number;
-  online: number;
-  isLoading: boolean;
-  onRefresh: () => void;
+  devices?: RegisteredDevice[] | null;
+  total?: number;
+  online?: number;
+  isLoading?: boolean;
+  onRefresh?: () => void;
 }
 
 export const DevicesTab: React.FC<DevicesTabProps> = ({
-  devices,
-  total,
-  online,
-  isLoading,
+  devices = [],
+  total = 0,
+  online = 0,
+  isLoading = false,
   onRefresh,
 }) => {
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'online' | 'offline'>('all');
 
+  const safeDevices = useMemo(() => {
+    return Array.isArray(devices) ? devices.filter(Boolean) : [];
+  }, [devices]);
+
   const filteredDevices = useMemo(() => {
-    return devices.filter((d) => {
-      if (filterMode === 'online' && !d.is_online) return false;
-      if (filterMode === 'offline' && d.is_online) return false;
+    return safeDevices.filter((d) => {
+      const isOnline = Boolean(d.is_online);
+      if (filterMode === 'online' && !isOnline) return false;
+      if (filterMode === 'offline' && isOnline) return false;
 
       if (!search.trim()) return true;
       const q = search.toLowerCase();
-      const devId = (d.device_id || '').toLowerCase();
-      const host = (d.hostname || '').toLowerCase();
-      const room = (d.room || '').toLowerCase();
-      const ip = (d.client_ip || '').toLowerCase();
-      const plat = (d.platform || '').toLowerCase();
+      const devId = String(d.device_id || '').toLowerCase();
+      const host = String(d.hostname || '').toLowerCase();
+      const room = String(d.room || '').toLowerCase();
+      const ip = String(d.client_ip || '').toLowerCase();
+      const plat = String(d.platform || '').toLowerCase();
+      const typeStr = String(d.type || '').toLowerCase();
       return (
         devId.includes(q) ||
         host.includes(q) ||
         room.includes(q) ||
         ip.includes(q) ||
-        plat.includes(q)
+        plat.includes(q) ||
+        typeStr.includes(q)
       );
     });
-  }, [devices, search, filterMode]);
+  }, [safeDevices, search, filterMode]);
 
-  const formatLastSeen = (utcStr?: string, secsSince?: number) => {
-    if (secsSince !== undefined) {
+  const formatLastSeen = (utcStr?: string | null, secsSince?: number | null) => {
+    if (typeof secsSince === 'number' && !isNaN(secsSince) && secsSince >= 0) {
       if (secsSince < 5) return 'Just now';
       if (secsSince < 60) return `${Math.round(secsSince)}s ago`;
       if (secsSince < 3600) return `${Math.round(secsSince / 60)}m ago`;
       return `${Math.round(secsSince / 3600)}h ago`;
     }
-    if (!utcStr) return 'Never';
+    if (!utcStr || typeof utcStr !== 'string') return 'Never';
     return utcStr.replace('T', ' ').slice(0, 19);
   };
+
+  const safeTotal = typeof total === 'number' ? total : safeDevices.length;
+  const safeOnline = typeof online === 'number' ? online : safeDevices.filter(d => Boolean(d.is_online)).length;
 
   return (
     <div className="space-y-4">
@@ -85,7 +95,7 @@ export const DevicesTab: React.FC<DevicesTabProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              All ({total})
+              All ({safeTotal})
             </button>
             <button
               onClick={() => setFilterMode('online')}
@@ -95,7 +105,7 @@ export const DevicesTab: React.FC<DevicesTabProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Online ({online})
+              Online ({safeOnline})
             </button>
             <button
               onClick={() => setFilterMode('offline')}
@@ -105,19 +115,21 @@ export const DevicesTab: React.FC<DevicesTabProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Offline ({total - online})
+              Offline ({Math.max(0, safeTotal - safeOnline)})
             </button>
           </div>
         </div>
 
-        <button
-          onClick={onRefresh}
-          disabled={isLoading}
-          className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-medium text-slate-200 transition-colors disabled:opacity-50"
-        >
-          <RotateCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-sky-400' : ''}`} />
-          <span>Refresh</span>
-        </button>
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            disabled={isLoading}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-medium text-slate-200 transition-colors disabled:opacity-50"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-sky-400' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        )}
       </div>
 
       {/* Devices Table */}
@@ -149,9 +161,9 @@ export const DevicesTab: React.FC<DevicesTabProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredDevices.map((dev) => (
+                filteredDevices.map((dev, idx) => (
                   <tr
-                    key={dev.device_id}
+                    key={dev.device_id || `dev-${idx}`}
                     className="hover:bg-slate-850/50 transition-colors"
                   >
                     {/* Status */}
@@ -173,29 +185,29 @@ export const DevicesTab: React.FC<DevicesTabProps> = ({
                     <td className="py-3.5 px-4 font-sans">
                       <div className="font-semibold text-slate-200 flex items-center gap-1.5">
                         <Cpu className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                        <span>{dev.hostname || dev.device_id}</span>
+                        <span>{dev.hostname || dev.device_id || 'Unknown Device'}</span>
                       </div>
                       <div className="text-[11px] font-mono text-slate-400 mt-0.5">
-                        {dev.device_id}
+                        {dev.device_id || '—'}
                       </div>
                     </td>
 
                     {/* Type & Platform */}
                     <td className="py-3.5 px-4">
                       <div className="text-slate-200 capitalize">
-                        {dev.type?.replace('_', ' ') || 'PC Telemetry'}
+                        {dev.type ? String(dev.type).replace(/_/g, ' ') : 'PC Telemetry'}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
-                        {dev.platform || 'Unknown OS'}
+                        {dev.platform || '—'}
                       </div>
                     </td>
 
                     {/* Physical Room */}
                     <td className="py-3.5 px-4">
-                      {dev.room && dev.room.trim() ? (
+                      {dev.room && String(dev.room).trim() ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
                           <MapPin className="w-3 h-3 text-amber-400" />
-                          {dev.room}
+                          {String(dev.room).trim()}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono text-slate-400 bg-slate-800/80 border border-slate-700/80">
@@ -206,7 +218,7 @@ export const DevicesTab: React.FC<DevicesTabProps> = ({
 
                     {/* Client IP */}
                     <td className="py-3.5 px-4 text-slate-300 text-xs">
-                      {dev.client_ip || 'N/A'}
+                      {dev.client_ip && dev.client_ip !== 'unknown' ? dev.client_ip : '—'}
                     </td>
 
                     {/* Last Seen */}
@@ -216,13 +228,15 @@ export const DevicesTab: React.FC<DevicesTabProps> = ({
                         <span>{formatLastSeen(dev.last_seen_utc, dev.seconds_since_seen)}</span>
                       </div>
                       <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                        {dev.last_seen_utc ? dev.last_seen_utc.replace('T', ' ').slice(0, 19) : ''}
+                        {typeof dev.last_seen_utc === 'string' && dev.last_seen_utc
+                          ? dev.last_seen_utc.replace('T', ' ').slice(0, 19)
+                          : '—'}
                       </div>
                     </td>
 
-                    {/* Payload Count */}
+                    {/* Payload Count (Defensive against undefined/null) */}
                     <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-300">
-                      {dev.payload_count.toLocaleString()}
+                      {(dev.payload_count ?? 0).toLocaleString()}
                     </td>
                   </tr>
                 ))

@@ -13,6 +13,7 @@ if SERVER_DIR not in sys.path:
 import device_registry
 import runtime_config
 import log_buffer
+import spool
 from routes.console_api import (
     StorageModeRequest,
     get_console_devices,
@@ -143,6 +144,56 @@ class TestDeviceRegistry(unittest.TestCase):
         rec_legacy = device_registry.upsert_from_request(legacy_esp, client_ip="192.168.1.151")
         self.assertEqual(rec_legacy["type"], "esp32_telemetry")
         self.assertEqual(rec_legacy["platform"], "ESP32")
+
+    def test_registry_persistence_and_payload_counts(self):
+        # 1. First upsert for PC
+        pc_payload = {
+            "device_id": "pc-persist-1",
+            "hostname": "workstation-pc",
+            "room": "Server-Room-B",
+            "metrics": {"system": {"platform": "Windows"}},
+        }
+        r1 = device_registry.upsert_from_request(pc_payload, client_ip="10.0.0.10")
+        self.assertEqual(r1["payload_count"], 1)
+
+        # 2. Second upsert for same device increments payload_count
+        r2 = device_registry.upsert_from_request(pc_payload, client_ip="10.0.0.10")
+        self.assertEqual(r2["payload_count"], 2)
+
+        # 3. First upsert for ESP32
+        esp_payload = {
+            "device_id": "ESP32-PERSIST",
+            "hostname": "esp-temp-node",
+            "room": "Lab-2",
+            "platform": "ESP32",
+            "type": "esp32_telemetry",
+            "metrics": {"dht11": {"temperature_c": 24.0}},
+        }
+        r3 = device_registry.upsert_from_request(esp_payload, client_ip="10.0.0.50")
+        self.assertEqual(r3["payload_count"], 1)
+
+        # Verify disk file exists
+        self.assertTrue(os.path.exists(device_registry.DEVICES_FILE))
+
+        # 4. Simulate server restart: clear memory only without deleting file
+        with device_registry._registry_lock:
+            device_registry._devices.clear()
+        self.assertEqual(device_registry.counts()["total"], 0)
+
+        # Reload from disk
+        loaded_count = device_registry.load_registry()
+        self.assertEqual(loaded_count, 2)
+        devs = device_registry.list_devices()
+        self.assertEqual(len(devs), 2)
+
+        # Verify stable keys and data integrity
+        dev_ids = {d["device_id"]: d for d in devs}
+        self.assertIn("pc-persist-1", dev_ids)
+        self.assertIn("ESP32-PERSIST", dev_ids)
+        self.assertEqual(dev_ids["pc-persist-1"]["payload_count"], 2)
+        self.assertEqual(dev_ids["pc-persist-1"]["room"], "Server-Room-B")
+        self.assertEqual(dev_ids["ESP32-PERSIST"]["payload_count"], 1)
+        self.assertEqual(dev_ids["ESP32-PERSIST"]["platform"], "ESP32")
 
 
 class TestRuntimeConfig(unittest.TestCase):
@@ -398,6 +449,51 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         body = resp.body.decode("utf-8")
         self.assertIn("EdgeShield Server Console", body)
         self.assertIn("root", body)
+
+    def test_console_devices_endpoint_stable_keys_and_counts(self):
+        # Post a PC payload and an ESP32 payload
+        req1 = DummyRequest(json_data={"device_id": "pc-01", "hostname": "pc-node", "room": "Lab-A", "metrics": {"cpu": {"utilization_percent": 10.0}}})
+        req2 = DummyRequest(json_data={"device_id": "ESP32-02", "room": None, "metrics": {"dht11": {"temperature_c": 22.0}}})
+        run_coro(receive_metrics(req1))
+        run_coro(receive_metrics(req2))
+
+        data = get_console_devices()
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(data["online"], 2)
+        self.assertEqual(len(data["devices"]), 2)
+
+        for dev in data["devices"]:
+            self.assertIn("device_id", dev)
+            self.assertIn("hostname", dev)
+            self.assertIn("type", dev)
+            self.assertIn("platform", dev)
+            self.assertIn("room", dev)
+            self.assertIn("client_ip", dev)
+            self.assertIn("first_seen_utc", dev)
+            self.assertIn("last_seen_utc", dev)
+            self.assertIn("payload_count", dev)
+            self.assertIn("is_online", dev)
+            self.assertIn("seconds_since_seen", dev)
+            self.assertGreaterEqual(dev["payload_count"], 1)
+
+        # Status counts must match registry
+        status = get_console_status()
+        self.assertEqual(status["devices"]["total"], 2)
+        self.assertEqual(status["devices"]["online"], 2)
+
+    def test_spool_corruption_auto_recovery(self):
+        # 1. Corrupt the database file by writing invalid non-SQLite garbage
+        db_path = spool.get_db_path()
+        with open(db_path, "wb") as f:
+            f.write(b"CORRUPTED_NON_SQLITE_GARBAGE_BYTES")
+
+        # 2. Call enqueue - it should catch DatabaseError, log once, recreate clean DB, and enqueue successfully
+        rec_id = spool.enqueue({"device_id": "recovery-test", "timestamp": "2026-11-21T10:00:00Z"})
+        self.assertGreater(rec_id, 0)
+        self.assertEqual(spool.count(), 1)
+        batch = spool.fetch_batch(limit=10)
+        self.assertEqual(len(batch), 1)
+        self.assertEqual(batch[0][1]["device_id"], "recovery-test")
 
 
 if __name__ == "__main__":

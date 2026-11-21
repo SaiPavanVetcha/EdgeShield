@@ -1,7 +1,9 @@
+import logging
 from device_registry import upsert_from_request
 from spool import enqueue
 from fastapi import APIRouter, HTTPException, Request
 
+logger = logging.getLogger("edgeshield.metrics")
 router = APIRouter()
 
 
@@ -21,12 +23,24 @@ async def receive_metrics(request: Request):
         # Durably append payload to SQLite spool
         enqueue(data)
 
-        # Update in-memory device registry with client host IP
-        client_ip = request.client.host if request.client else "unknown"
+        # Extract client IP from X-Forwarded-For or direct client connection
+        client_ip = "unknown"
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            client_ip = forwarded.split(",")[0].strip()
+        elif request.client and request.client.host:
+            client_ip = request.client.host
+
+        # Update and persist device registry
         try:
             upsert_from_request(data, client_ip)
-        except Exception:
-            pass
+        except Exception as reg_err:
+            logger.error(
+                "Failed to upsert device_registry for device_id=%s: %s",
+                data.get("device_id"),
+                reg_err,
+                exc_info=True,
+            )
 
         response = {
             "status": "success",
