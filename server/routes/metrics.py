@@ -1,5 +1,6 @@
 import logging
 from device_registry import upsert_from_request
+from runtime_stats import record_received
 from spool import enqueue
 from fastapi import APIRouter, HTTPException, Request
 
@@ -20,8 +21,9 @@ async def receive_metrics(request: Request):
                 detail="Invalid payload: missing device_id",
             )
 
-        # Durably append payload to SQLite spool
+        # Durably append payload to SQLite spool and increment process telemetry counter
         enqueue(data)
+        record_received(1)
 
         # Extract client IP from X-Forwarded-For or direct client connection
         client_ip = "unknown"

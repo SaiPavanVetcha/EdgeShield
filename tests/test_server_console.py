@@ -359,13 +359,31 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         res = update_storage_mode(StorageModeRequest(mode="local"))
         self.assertEqual(res["status"], "success")
         self.assertEqual(res["storage_mode"], "local")
+        self.assertEqual(res["mode"], "local")
+        self.assertIn("inserted", res)
+        self.assertIn("failed", res)
+        self.assertIn("pending_remaining", res)
         self.assertEqual(runtime_config.get_storage_mode(), "local")
 
-        # Switch to databricks
-        res = update_storage_mode(StorageModeRequest(mode="databricks"))
-        self.assertEqual(res["status"], "success")
-        self.assertEqual(res["storage_mode"], "databricks")
-        self.assertEqual(runtime_config.get_storage_mode(), "databricks")
+        # Switch to databricks (triggers auto flush)
+        with patch("routes.console_api.trigger_flush") as mock_flush:
+            mock_flush.return_value = {
+                "status": "success",
+                "mode": "databricks",
+                "inserted": 2,
+                "failed": 0,
+                "pending": 0,
+                "pending_remaining": 0,
+            }
+            res = update_storage_mode(StorageModeRequest(mode="databricks"))
+            self.assertEqual(res["status"], "success")
+            self.assertEqual(res["storage_mode"], "databricks")
+            self.assertEqual(res["mode"], "databricks")
+            self.assertEqual(res["inserted"], 2)
+            self.assertEqual(res["failed"], 0)
+            self.assertEqual(res["pending_remaining"], 0)
+            self.assertEqual(runtime_config.get_storage_mode(), "databricks")
+            self.assertTrue(mock_flush.called)
 
         # Invalid mode
         with self.assertRaises(HTTPException) as ctx:
@@ -494,6 +512,61 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         batch = spool.fetch_batch(limit=10)
         self.assertEqual(len(batch), 1)
         self.assertEqual(batch[0][1]["device_id"], "recovery-test")
+
+    def test_switch_to_local_does_not_wipe_spool(self):
+        # 1. Enqueue 2 records
+        spool.enqueue({"device_id": "keep-1", "timestamp": "2026-11-21T10:00:00Z"})
+        spool.enqueue({"device_id": "keep-2", "timestamp": "2026-11-21T10:00:01Z"})
+        count_before = spool.count()
+        self.assertGreaterEqual(count_before, 2)
+
+        # 2. Switch to local mode
+        res = update_storage_mode(StorageModeRequest(mode="local"))
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["storage_mode"], "local")
+
+        # 3. Spool must NOT be wiped
+        count_after = spool.count()
+        self.assertEqual(count_after, count_before)
+        self.assertEqual(res["pending_remaining"], count_before)
+
+    def test_manual_flush_local_mode_semantics(self):
+        # Ensure local mode
+        runtime_config.set_storage_mode("local")
+        spool.enqueue({"device_id": "local-test", "timestamp": "2026-11-21T10:00:00Z"})
+        pending_before = spool.count()
+        self.assertGreater(pending_before, 0)
+
+        # Manual flush in local mode should skip cloud flush, retain records
+        res = manual_flush()
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["mode"], "local")
+        self.assertEqual(res["inserted"], 0)
+        self.assertEqual(res["failed"], 0)
+        self.assertEqual(res["pending"], pending_before)
+        self.assertIn("cloud flush skipped", res["message"])
+        self.assertEqual(spool.count(), pending_before)
+
+    def test_spool_max_records_unlimited_no_trim(self):
+        # With max_records <= 0, maybe_trim must be disabled and drop 0 records
+        dropped = spool.maybe_trim(0)
+        self.assertEqual(dropped, 0)
+        dropped_neg = spool.maybe_trim(-10)
+        self.assertEqual(dropped_neg, 0)
+
+    def test_process_counters_status_endpoint(self):
+        import runtime_stats
+        runtime_stats.reset_process_counters()
+
+        # Send a telemetry payload via POST /metrics
+        req = DummyRequest(json_data={"device_id": "counter-test-pc", "metrics": {"cpu": {"utilization_percent": 15.0}}})
+        run_coro(receive_metrics(req))
+
+        status = get_console_status()
+        self.assertIn("records_received", status)
+        self.assertIn("records_inserted_to_cloud", status)
+        self.assertGreaterEqual(status["records_received"], 1)
+        self.assertGreaterEqual(status["spool"]["records_received"], 1)
 
 
 if __name__ == "__main__":

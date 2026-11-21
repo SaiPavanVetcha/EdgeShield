@@ -1,4 +1,6 @@
+import functools
 import json
+import logging
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -7,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from config import SPOOL_DIR, SPOOL_MAX_RECORDS
 
+logger = logging.getLogger("edgeshield.spool")
 _db_initialized = False
 
 
@@ -18,14 +21,16 @@ def get_db_path() -> str:
 
 def _recreate_corrupt_db(path: str, err: Exception) -> None:
     """Removes corrupt database files and recreates a clean spool database."""
-    print(f"[!] Warning: Spool database at {path} was corrupted ({err}). Recreating cleanly.")
+    msg = f"Spool database at {path} was missing/corrupt ({err}). Recreating cleanly."
+    logger.warning("[!] %s", msg)
+    print(f"[!] Warning: {msg}")
     for ext in ("", "-wal", "-shm"):
         target = path + ext
         if os.path.exists(target):
             try:
                 os.remove(target)
             except Exception as rm_err:
-                print(f"[!] Could not remove {target}: {rm_err}")
+                logger.debug("Could not remove %s: %s", target, rm_err)
     init_db(path, force=True)
 
 
@@ -60,6 +65,19 @@ def get_connection(db_path: Optional[str] = None):
                 conn.close()
             except Exception:
                 pass
+
+
+def with_spool_retry(func):
+    """Decorator to retry a database operation once after cleanly recreating if SQLite is corrupt."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except sqlite3.DatabaseError as err:
+            path = get_db_path()
+            _recreate_corrupt_db(path, err)
+            return func(*args, **kwargs)
+    return wrapper
 
 
 def init_db(db_path: Optional[str] = None, force: bool = False) -> None:
@@ -99,10 +117,11 @@ def ensure_initialized(db_path: Optional[str] = None) -> None:
         _db_initialized = True
 
 
+@with_spool_retry
 def enqueue(payload: Dict[str, Any]) -> int:
     """
     Appends a telemetry payload dictionary to the local durable spool.
-    Trims oldest records if SPOOL_MAX_RECORDS is exceeded.
+    Trims oldest records if SPOOL_MAX_RECORDS > 0 and limit is exceeded.
     Returns the newly inserted record ID.
     """
     created_at = datetime.now(timezone.utc).isoformat()
@@ -117,10 +136,12 @@ def enqueue(payload: Dict[str, Any]) -> int:
         conn.commit()
         record_id = cursor.lastrowid
 
-    maybe_trim(SPOOL_MAX_RECORDS)
+    if SPOOL_MAX_RECORDS > 0:
+        maybe_trim(SPOOL_MAX_RECORDS)
     return record_id
 
 
+@with_spool_retry
 def count() -> int:
     """Returns the total number of pending records in the spool."""
     with get_connection() as conn:
@@ -130,6 +151,7 @@ def count() -> int:
         return row[0] if row else 0
 
 
+@with_spool_retry
 def fetch_batch(limit: int) -> List[Tuple[int, Dict[str, Any]]]:
     """
     Fetches up to `limit` oldest records from the spool in FIFO order.
@@ -155,6 +177,7 @@ def fetch_batch(limit: int) -> List[Tuple[int, Dict[str, Any]]]:
             payload = json.loads(payload_json)
             batch.append((row_id, payload))
         except (json.JSONDecodeError, TypeError) as err:
+            logger.warning("[!] Corrupted spool record id=%s dropped: %s", row_id, err)
             print(f"[!] Warning: Corrupted spool record id={row_id} dropped: {err}")
             corrupted_ids.append(row_id)
 
@@ -164,6 +187,7 @@ def fetch_batch(limit: int) -> List[Tuple[int, Dict[str, Any]]]:
     return batch
 
 
+@with_spool_retry
 def delete_ids(ids: List[int]) -> int:
     """
     Deletes records matching the specified IDs from the spool.
@@ -180,11 +204,16 @@ def delete_ids(ids: List[int]) -> int:
         return cursor.rowcount
 
 
+@with_spool_retry
 def maybe_trim(max_records: int = SPOOL_MAX_RECORDS) -> int:
     """
     If the spool exceeds max_records, drops the oldest records.
+    If max_records <= 0, trimming is disabled (unlimited retention).
     Returns the number of dropped records.
     """
+    if max_records <= 0:
+        return 0
+
     total = count()
     if total <= max_records:
         return 0
@@ -206,10 +235,13 @@ def maybe_trim(max_records: int = SPOOL_MAX_RECORDS) -> int:
         conn.commit()
         dropped = cursor.rowcount
 
-    print(f"[!] Warning: Server spool exceeded {max_records} records. Dropped {dropped} oldest record(s).")
+    msg = f"Server spool exceeded {max_records} records. Dropped {dropped} oldest record(s)."
+    logger.warning("[!] %s", msg)
+    print(f"[!] Warning: {msg}")
     return dropped
 
 
+@with_spool_retry
 def export_all() -> List[Dict[str, Any]]:
     """
     Returns all records currently in the spool in FIFO order.
@@ -232,4 +264,3 @@ def export_all() -> List[Dict[str, Any]]:
             "payload": payload,
         })
     return records
-

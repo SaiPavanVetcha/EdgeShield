@@ -33,6 +33,8 @@ export interface ConsoleStatusResponse {
   storage_mode: 'local' | 'databricks';
   databricks_configured: boolean;
   pending: number;
+  records_received?: number;
+  records_inserted_to_cloud?: number;
   last_flush: LastFlushStatus | null;
   spool: SpoolStats;
   devices: DeviceCounts;
@@ -62,17 +64,26 @@ export interface DeviceListResponse {
 export interface StorageModeUpdateResponse {
   status: string;
   storage_mode: 'local' | 'databricks';
+  mode?: string;
+  inserted?: number;
+  failed?: number;
+  pending_remaining?: number;
+  flush?: FlushResponse;
   message: string;
   console_status: ConsoleStatusResponse;
 }
 
 export interface FlushResponse {
   status: string;
-  storage_mode: string;
+  storage_mode?: string;
+  mode?: string;
+  inserted?: number;
   flushed?: number;
   failed?: number;
   pending?: number;
+  pending_remaining?: number;
   message: string;
+  last_flush?: LastFlushStatus | null;
 }
 
 export interface LogEntry {

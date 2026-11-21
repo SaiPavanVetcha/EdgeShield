@@ -24,6 +24,7 @@ from runtime_config import (
     is_databricks_configured,
     set_storage_mode,
 )
+from runtime_stats import get_process_counters
 from spool import count as spool_count, export_all as spool_export_all, get_db_path
 
 router = APIRouter(prefix="/api/console", tags=["console"])
@@ -77,8 +78,8 @@ def get_uptime_seconds() -> float:
 def get_console_status() -> Dict[str, Any]:
     """
     Returns real-time status of the ingestion server, including uptime,
-    active storage mode, Databricks configuration state, spool metrics, devices,
-    and detected primary advertised IPv4.
+    active storage mode, Databricks configuration state, spool metrics, process counters,
+    devices, and detected primary advertised IPv4.
     """
     device_counts = registry_counts(online_within_seconds=120)
     current_storage_mode = get_storage_mode()
@@ -87,6 +88,7 @@ def get_console_status() -> Dict[str, Any]:
     last_flush = get_last_flush_status()
     advertised_host = get_advertised_host(HOST)
     advertised_url = f"http://{advertised_host}:{PORT}"
+    counters = get_process_counters()
 
     return {
         "status": "online",
@@ -101,12 +103,16 @@ def get_console_status() -> Dict[str, Any]:
         "storage_mode": current_storage_mode,
         "databricks_configured": db_configured,
         "pending": pending_records,
+        "records_received": counters["records_received"],
+        "records_inserted_to_cloud": counters["records_inserted_to_cloud"],
         "last_flush": last_flush,
         "spool": {
             "pending": pending_records,
             "max_records": SPOOL_MAX_RECORDS,
             "flush_interval_seconds": FLUSH_INTERVAL_SECONDS,
             "flush_max_records": FLUSH_MAX_RECORDS,
+            "records_received": counters["records_received"],
+            "records_inserted_to_cloud": counters["records_inserted_to_cloud"],
             "last_flush": last_flush,
         },
         "devices": device_counts,
@@ -132,6 +138,9 @@ def get_console_devices() -> Dict[str, Any]:
 def update_storage_mode(payload: StorageModeRequest) -> Dict[str, Any]:
     """
     Persists and switches the server storage mode to 'local' or 'databricks'.
+    When switching to 'databricks' (from local), automatically triggers a full pending
+    flush to Databricks. Switching to 'local' preserves all spooled records on disk.
+    Response includes flush summary: inserted, failed, pending_remaining, mode.
     """
     mode = payload.mode.strip().lower()
     if mode not in ALLOWED_STORAGE_MODES:
@@ -140,15 +149,50 @@ def update_storage_mode(payload: StorageModeRequest) -> Dict[str, Any]:
             detail=f"Invalid storage mode '{payload.mode}'. Must be one of: {sorted(ALLOWED_STORAGE_MODES)}",
         )
 
+    previous_mode = get_storage_mode()
     try:
         updated_mode = set_storage_mode(mode)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to persist storage mode: {str(e)}")
 
+    flush_summary = {
+        "inserted": 0,
+        "failed": 0,
+        "pending_remaining": spool_count(),
+        "mode": updated_mode,
+    }
+
+    if updated_mode == "databricks" and previous_mode != "databricks":
+        flush_res = trigger_flush()
+        flush_summary = {
+            "inserted": flush_res.get("inserted", 0),
+            "failed": flush_res.get("failed", 0),
+            "pending_remaining": flush_res.get("pending_remaining", flush_res.get("pending", spool_count())),
+            "mode": updated_mode,
+            "flush_result": flush_res,
+        }
+        message = (
+            f"Storage mode switched to 'databricks'. "
+            f"Auto-flush: {flush_summary['inserted']} inserted, "
+            f"{flush_summary['failed']} failed ({flush_summary['pending_remaining']} remaining in spool)."
+        )
+    elif updated_mode == "local":
+        message = (
+            f"Storage mode switched to 'local'. "
+            f"Spool records ({flush_summary['pending_remaining']} pending) retained durably on disk."
+        )
+    else:
+        message = f"Storage mode is '{updated_mode}'."
+
     return {
         "status": "success",
         "storage_mode": updated_mode,
-        "message": f"Storage mode switched to '{updated_mode}'.",
+        "mode": updated_mode,
+        "inserted": flush_summary["inserted"],
+        "failed": flush_summary["failed"],
+        "pending_remaining": flush_summary["pending_remaining"],
+        "flush": flush_summary,
+        "message": message,
         "console_status": get_console_status(),
     }
 

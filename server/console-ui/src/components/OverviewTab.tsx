@@ -54,8 +54,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
   const isLocal = status.storage_mode === 'local';
   const pending = status.pending ?? status.spool?.pending ?? 0;
-  const maxSpool = status.spool?.max_records || 10000;
-  const spoolPercent = Math.min(100, Math.round((pending / maxSpool) * 100));
+  const maxSpool = status.spool?.max_records ?? 100000;
+  const spoolPercent = maxSpool > 0 ? Math.min(100, Math.round((pending / maxSpool) * 100)) : 0;
 
   return (
     <div className="space-y-6">
@@ -138,7 +138,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               {pending}
             </span>
             <span className="text-xs text-slate-400">
-              pending / {maxSpool.toLocaleString()} limit
+              pending / {maxSpool > 0 ? `${maxSpool.toLocaleString()} limit` : 'unlimited'}
             </span>
           </div>
           <div className="mt-3 w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-800">
@@ -148,6 +148,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               }`}
               style={{ width: `${Math.max(2, spoolPercent)}%` }}
             />
+          </div>
+          <div className="mt-2.5 text-[11px] text-slate-400 font-mono flex items-center justify-between">
+            <span>Inbound: <strong className="text-slate-200">{status.records_received ?? 0}</strong></span>
+            <span>Cloud: <strong className="text-sky-300">{status.records_inserted_to_cloud ?? 0}</strong></span>
           </div>
         </div>
 

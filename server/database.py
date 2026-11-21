@@ -15,6 +15,7 @@ from config import (
     FLUSH_MAX_RECORDS,
 )
 from runtime_config import get_storage_mode
+from runtime_stats import record_inserted_to_cloud
 from spool import count, delete_ids, enqueue, fetch_batch
 
 load_dotenv()
@@ -344,6 +345,7 @@ def flush_spool_to_databricks() -> Tuple[int, int]:
             "inserted": total_sent,
             "failed": total_failed,
             "success": (total_failed == 0),
+            "mode": "databricks",
         }
 
     except Exception as conn_err:
@@ -354,6 +356,7 @@ def flush_spool_to_databricks() -> Tuple[int, int]:
             "inserted": total_sent,
             "failed": total_failed,
             "success": False,
+            "mode": "databricks",
             "error": str(conn_err),
         }
 
@@ -364,7 +367,11 @@ def flush_spool_to_databricks() -> Tuple[int, int]:
             except Exception:
                 pass
 
+    if total_sent > 0:
+        record_inserted_to_cloud(total_sent)
+
     remaining = count()
+    _last_flush_status["pending_remaining"] = remaining
     if total_sent > 0 or total_failed > 0:
         timestamp = datetime.now(timezone.utc).isoformat()
         print(f"[{timestamp}] Databricks flush: {total_sent} inserted, {total_failed} failed (pending: {remaining})")
@@ -415,7 +422,9 @@ def _spool_flush_worker():
 def trigger_flush() -> Dict[str, Any]:
     """
     Triggers one flush cycle appropriate to the active storage mode.
-    Returns operational summary including inserted, failed, pending count, mode, and last flush detail.
+    Forces one full drain attempt of the server spool to Databricks when mode is databricks.
+    When mode is local, cloud flush is skipped and pending spool records are preserved on disk.
+    Returns operational summary including inserted, failed, pending, pending_remaining, mode, and last flush detail.
     """
     mode = get_storage_mode()
     pending = count()
@@ -425,19 +434,23 @@ def trigger_flush() -> Dict[str, Any]:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "inserted": 0,
             "failed": 0,
+            "pending": pending,
+            "pending_remaining": pending,
             "success": True,
             "mode": "local",
-            "message": "Storage mode is local; records retained in spool without cloud sync.",
+            "message": "Storage mode is local; cloud flush skipped (spool retained on disk).",
         }
         global _last_flush_status
         _last_flush_status = status_info
         return {
             "status": "success",
             "mode": "local",
+            "storage_mode": "local",
             "inserted": 0,
             "failed": 0,
             "pending": pending,
-            "message": "Storage mode is local; spool records retained durably on disk.",
+            "pending_remaining": pending,
+            "message": "Storage mode is local; cloud flush skipped (spool retained on disk).",
             "last_flush": dict(status_info),
         }
 
@@ -447,11 +460,13 @@ def trigger_flush() -> Dict[str, Any]:
     return {
         "status": "success" if success else "error",
         "mode": "databricks",
+        "storage_mode": "databricks",
         "inserted": sent,
         "failed": failed,
         "pending": remaining,
+        "pending_remaining": remaining,
         "message": (
-            f"Databricks flush completed: {sent} inserted, {failed} failed."
+            f"Databricks flush completed: {sent} inserted, {failed} failed ({remaining} remaining in spool)."
             if success
             else f"Databricks flush encountered failures ({failed} records retained in spool)."
         ),

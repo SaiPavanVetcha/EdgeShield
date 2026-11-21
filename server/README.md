@@ -9,11 +9,12 @@ The Central Ingestion Server receives real-time telemetry payloads over HTTP fro
 
 ## Architectural Highlights
 
-1. **Durable Local Spooling (`server_spool.db`):** Inbound telemetry is durably committed to SQLite before cloud transmission. Network partitions or Databricks outages never drop edge data.
+1. **Durable Local Spooling (`server_spool.db`):** Inbound telemetry is durably committed to SQLite before cloud transmission. Network partitions or Databricks outages never drop edge data. If the SQLite database file is missing or corrupted, the server automatically recreates a clean database without crashing or requiring manual folder deletion.
 2. **App-Level All-or-Nothing Cloud Ingest:** Multi-table inserts (system, CPU, RAM, disk, battery, environment) for a single payload are executed against Databricks landing tables. Note: workspace and Hive metastore landing tables (`edgeshield_db.*`) are non-catalog-managed and do not support multi-statement SQL transactions (`TRANSACTION_NOT_SUPPORTED.WRITE_NON_CATALOG_MANAGED_TABLE`). Durability is guaranteed at the application level: a spool record is deleted from local disk **only if every insert for that payload succeeds**. On any failure, the spool row is retained for automatic retry.
 3. **Dual Storage Modes (`local` vs. `databricks`):**
    - **`local` Mode:** Telemetry is durably spooled on disk and tracked in the in-memory device registry without connecting to Databricks. Enables instant local pilot testing without cloud accounts or credentials.
-   - **`databricks` Mode:** Spooled records are flushed periodically to the Databricks Lakehouse landing tables.
+     > **Operator Responsibility Note on Disk Usage:** In `local` mode, cloud auto-flushing is suspended. Data accumulates in the SQLite spool file (`spool/server_spool.db`). While `SPOOL_MAX_RECORDS` limits the record count, prolonged local operation can increase disk usage over time. Operators are responsible for monitoring host disk space and periodically switching to cloud mode or exporting/clearing spool data when appropriate.
+   - **`databricks` Mode:** Spooled records are flushed periodically to the Databricks Lakehouse landing tables. When switching from `local` to `databricks`, the server automatically initiates a full pending spool flush. Switching to `local` preserves all buffered records on disk.
    - Storage mode can be switched dynamically at runtime via the Server Console or REST API (`POST /api/console/storage-mode`).
 4. **Server Console Control Plane:** Built-in web operations interface accessible at `http://<SERVER_IP>:5000/console` featuring tabbed views for system overview, connected devices, spool metrics, manual flush triggers, and live logs.
 5. **Physical Room Dimension:** Ingests top-level `room` metadata from payloads, stores it in `edgeshield_db.system_metrics`, and feeds the Gold layer `dim_device` location dimension.
@@ -59,7 +60,7 @@ DATABRICKS_TOKEN=dapi_your_personal_access_token_here
 SPOOL_DIR=./spool
 FLUSH_INTERVAL_SECONDS=5.0
 FLUSH_MAX_RECORDS=20
-SPOOL_MAX_RECORDS=10000
+SPOOL_MAX_RECORDS=100000   # Max records retained in spool (default: 100000; set to 0 for unlimited / no trim)
 ```
 
 ### 3. Start the Server

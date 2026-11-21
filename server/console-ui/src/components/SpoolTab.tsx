@@ -31,7 +31,7 @@ export const SpoolTab: React.FC<SpoolTabProps> = ({
   const [localFeedback, setLocalFeedback] = useState<FlushResponse | null>(null);
 
   const pending = status?.pending ?? status?.spool?.pending ?? 0;
-  const maxRecords = status?.spool?.max_records || 10000;
+  const maxRecords = status?.spool?.max_records ?? 100000;
   const flushBatch = status?.spool?.flush_max_records || 20;
   const flushInterval = status?.spool?.flush_interval_seconds || 5.0;
   const storageMode = status?.storage_mode || 'databricks';
@@ -39,7 +39,7 @@ export const SpoolTab: React.FC<SpoolTabProps> = ({
   const databricksConfigured = status?.databricks_configured ?? false;
   const lastFlush = status?.last_flush;
 
-  const capacityPct = Math.min(100, Math.round((pending / maxRecords) * 100));
+  const capacityPct = maxRecords > 0 ? Math.min(100, Math.round((pending / maxRecords) * 100)) : 0;
 
   const handleFlushClick = async () => {
     try {
@@ -81,7 +81,7 @@ export const SpoolTab: React.FC<SpoolTabProps> = ({
                 {pending.toLocaleString()}
               </span>
               <span className="text-sm text-slate-400">
-                pending records / {maxRecords.toLocaleString()} max buffer
+                pending records / {maxRecords > 0 ? `${maxRecords.toLocaleString()} max buffer` : 'unlimited retention'}
               </span>
             </div>
 
@@ -180,10 +180,10 @@ export const SpoolTab: React.FC<SpoolTabProps> = ({
                 Flush Cycle Result: {activeFeedback.message}
               </p>
               <div className="flex flex-wrap items-center gap-4 mt-1 font-mono text-[11px] text-slate-400">
-                <span>Storage Mode: <strong className="text-slate-200 capitalize">{activeFeedback.storage_mode}</strong></span>
-                <span>Flushed: <strong className="text-emerald-400">{activeFeedback.flushed ?? 0}</strong></span>
+                <span>Storage Mode: <strong className="text-slate-200 capitalize">{activeFeedback.storage_mode || activeFeedback.mode}</strong></span>
+                <span>Inserted: <strong className="text-emerald-400">{activeFeedback.inserted ?? activeFeedback.flushed ?? 0}</strong></span>
                 <span>Failed: <strong className="text-rose-400">{activeFeedback.failed ?? 0}</strong></span>
-                <span>Queue Pending: <strong className="text-slate-200">{activeFeedback.pending ?? 0}</strong></span>
+                <span>Queue Pending: <strong className="text-slate-200">{activeFeedback.pending_remaining ?? activeFeedback.pending ?? 0}</strong></span>
               </div>
             </div>
           </div>

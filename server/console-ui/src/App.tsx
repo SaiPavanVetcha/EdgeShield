@@ -162,8 +162,22 @@ export const App: React.FC = () => {
     try {
       const res = await consoleApi.setStorageMode(targetMode);
       setStatus(res.console_status);
-      showNotification('success', `Storage mode switched to ${res.storage_mode.toUpperCase()}`);
-      await fetchLogs();
+      if (targetMode === 'databricks') {
+        const ins = res.inserted ?? res.flush?.inserted ?? 0;
+        const fail = res.failed ?? res.flush?.failed ?? 0;
+        const pend = res.pending_remaining ?? res.flush?.pending_remaining ?? res.console_status?.pending ?? 0;
+        showNotification(
+          fail > 0 ? 'error' : 'success',
+          `Mode switched to CLOUD. Flush: ${ins} inserted, ${fail} failed, ${pend} pending`
+        );
+      } else {
+        const pend = res.pending_remaining ?? res.console_status?.pending ?? 0;
+        showNotification(
+          'success',
+          `Mode switched to LOCAL. Spool retained (${pend} pending).`
+        );
+      }
+      await Promise.all([fetchStatus(true), fetchDevices(true), fetchLogs()]);
     } catch (err: any) {
       showNotification('error', err.message || 'Failed to switch storage mode');
     } finally {
@@ -194,7 +208,13 @@ export const App: React.FC = () => {
     try {
       const res = await consoleApi.triggerFlush();
       setLastFlushResult(res);
-      showNotification('success', res.message || 'Flush cycle triggered successfully');
+      const ins = res.inserted ?? res.flushed ?? 0;
+      const fail = res.failed ?? 0;
+      const pend = res.pending_remaining ?? res.pending ?? 0;
+      showNotification(
+        fail > 0 ? 'error' : 'success',
+        `Flush complete: ${ins} inserted, ${fail} failed, ${pend} pending`
+      );
       await Promise.all([fetchStatus(true), fetchDevices(true), fetchLogs(true)]);
       return res;
     } catch (err: any) {
