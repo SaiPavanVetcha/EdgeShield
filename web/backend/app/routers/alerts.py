@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Path
 from app.models import AlertListResponse
 from app.services.alert_engine import alert_engine
+from app.validation import validate_alert_id
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
@@ -24,7 +25,11 @@ def acknowledge_alert(
     Marks an alert as acknowledged.
     """
     try:
-        success = alert_engine.acknowledge_alert(alert_id)
-        return {"status": "ok", "alert_id": alert_id, "acknowledged": success}
+        # Validation safety layer: strictly validate alert identifier format
+        clean_alert_id = validate_alert_id(alert_id)
+        success = alert_engine.acknowledge_alert(clean_alert_id)
+        return {"status": "ok", "alert_id": clean_alert_id, "acknowledged": success}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

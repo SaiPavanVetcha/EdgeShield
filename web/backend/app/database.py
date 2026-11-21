@@ -118,6 +118,8 @@ class DatabaseManager:
                             # If server or driver rejects native parameter markers (e.g. older DBR or parameter binding disabled)
                             if any(w in err_str for w in ["parameter", "bind", "unsupported", "syntax error"]):
                                 logger.warning(f"Native parameter execution error ({param_err}); applying safe substitution.")
+                                # Validation safety layer: fallback parameter binding with strict quote escaping
+                                # and lambda substitution to prevent regex escape injection.
                                 safe_query = query
                                 for k, v in params.items():
                                     if isinstance(v, (int, float)):
@@ -125,9 +127,10 @@ class DatabaseManager:
                                     elif v is None:
                                         val_repr = "NULL"
                                     else:
+                                        # Double single-quotes for SQL escaping
                                         escaped = str(v).replace("'", "''")
                                         val_repr = f"'{escaped}'"
-                                    safe_query = re.sub(rf":{k}\b", val_repr, safe_query)
+                                    safe_query = re.sub(rf":{k}\b", lambda m, rep=val_repr: rep, safe_query)
                                 cursor.execute(safe_query)
                             else:
                                 raise

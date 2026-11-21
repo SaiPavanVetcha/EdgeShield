@@ -29,9 +29,12 @@ class AlertEngine:
         is_cached_total = False
         warehouse_status_total = "online"
         now_utc = datetime.now(timezone.utc)
+        # Validation safety layer: recent_window_ts is generated internally from UTC clock and formatted
+        # via strftime to standard timestamp pattern, bound safely via :window_ts named parameter.
         recent_window_ts = (now_utc - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
 
         # 1. Device Offline Rule (> 3 minutes without data)
+        # Validation safety layer: static query over trusted catalog/schema prefix; no untrusted parameters.
         sql_devices = f"""
             SELECT
                 d.device_key,
@@ -105,6 +108,7 @@ class AlertEngine:
                 )
 
         # 2. CPU > 85% sustained
+        # Validation safety layer: :window_ts parameterization prevents injection into filter clauses.
         window_params = {"window_ts": recent_window_ts}
 
         sql_cpu = f"""

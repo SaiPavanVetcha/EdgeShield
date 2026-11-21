@@ -11,6 +11,7 @@ from app.validation import (
     validate_device_id,
     validate_room,
     validate_device_key,
+    validate_alert_id,
     validate_metric,
     validate_trunc_grain,
     validate_timestamp,
@@ -18,6 +19,7 @@ from app.validation import (
     ALLOWED_TRUNC_GRAINS,
 )
 from app.services.databricks_service import databricks_service
+from app.services.alert_engine import alert_engine
 
 
 class TestValidation(unittest.TestCase):
@@ -86,6 +88,18 @@ class TestValidation(unittest.TestCase):
             self.assertEqual(validate_trunc_grain(g), g)
         # Invalid grain falls back safely to 'minute'
         self.assertEqual(validate_trunc_grain("year; DROP DATABASE;"), "minute")
+
+    def test_validate_alert_id_valid_and_rejected(self):
+        self.assertEqual(validate_alert_id("alert-dev-001-cpu"), "alert-dev-001-cpu")
+        injections = [
+            "alert' OR '1'='1",
+            "alert; DROP TABLE alerts;",
+            "<script>alert(1)</script>",
+            "a" * 65,
+        ]
+        for inj in injections:
+            with self.assertRaises(HTTPException):
+                validate_alert_id(inj)
 
 
 class TestQueryParameterization(unittest.TestCase):
@@ -176,6 +190,20 @@ class TestQueryParameterization(unittest.TestCase):
             self.assertEqual(params["room"], "Lab-1")
             self.assertEqual(params["from_ts"], "2026-11-20 00:00:00")
             self.assertEqual(params["to_ts"], "2026-11-20 12:00:00")
+
+    @patch("app.services.alert_engine.db_manager.execute_query")
+    def test_alert_engine_uses_window_ts_parameters(self, mock_exec):
+        mock_exec.return_value = ([], False, "online")
+        res = alert_engine.get_alerts()
+        self.assertEqual(res.warehouse_status, "online")
+        # Ensure parameterized execute_query calls include :window_ts
+        param_calls = [c for c in mock_exec.call_args_list if c[1].get("params")]
+        self.assertGreaterEqual(len(param_calls), 5)  # CPU, RAM, Disk, Env, Battery
+        for call in param_calls:
+            query = call[0][0]
+            params = call[1]["params"]
+            self.assertIn(":window_ts", query)
+            self.assertIn("window_ts", params)
 
 
 if __name__ == "__main__":

@@ -39,7 +39,9 @@ class DatabricksService:
         Query dim_device and calculate real-time status and telemetry capabilities.
         Optionally filter by room.
         """
-        cache_key = f"devices_list_{room}" if room and room != "all" else "devices_list"
+        # Validation safety layer: strictly validate room format before cache lookup or filtering
+        safe_room = validate_room(room)
+        cache_key = f"devices_list_{safe_room}" if safe_room and safe_room != "all" else "devices_list"
         # 1. Fetch devices from dim_device
         try:
             sql_dim = f"""
@@ -84,8 +86,9 @@ class DatabricksService:
                 warehouse_status=status,
             )
 
-        if room and room != "all":
-            dim_rows = [r for r in dim_rows if (r.get("room") or "").strip() == room.strip()]
+        if safe_room and safe_room != "all":
+            # Validation safety layer: in-memory room filtering with normalized, validated room string
+            dim_rows = [r for r in dim_rows if (r.get("room") or "").strip() == safe_room.strip()]
 
         # 2. Get latest event_timestamp per device to calculate last_seen and online status
         sql_last_seen = f"""
@@ -196,10 +199,13 @@ class DatabricksService:
     def _resolve_device_key(self, device_id: str) -> Optional[str]:
         if not device_id or device_id.lower() == "all":
             return None
+        # Validation safety layer: strictly validate device_id against safe character set and length (1-64 chars)
         safe_dev_id = validate_device_id(device_id)
+        # Parameterized query: device_id bound safely as named parameter :device_id
         sql = f"SELECT device_key FROM {self.prefix}.dim_device WHERE device_id = :device_id LIMIT 1"
         rows, _, _ = db_manager.execute_query(sql, params={"device_id": safe_dev_id}, cache_key=f"dev_key_{safe_dev_id}")
         if rows:
+            # Validation safety layer: ensure resolved internal surrogate key strictly matches alphanumeric format
             return validate_device_key(rows[0]["device_key"])
         return None
 
@@ -209,6 +215,7 @@ class DatabricksService:
         Each metric is queried independently to handle ESP32 / PC client timestamp mismatches.
         Uses parameterized queries with strict validation.
         """
+        # Validation safety layer: strictly validate all input parameters
         safe_dev_id = validate_device_id(device_id)
         safe_room = validate_room(room)
         safe_from_ts = validate_timestamp(from_ts)
@@ -220,9 +227,11 @@ class DatabricksService:
 
         if safe_dev_id != "all":
             try:
+                # Parameterized query: safe_dev_id bound as parameter
                 sql_dev = f"SELECT device_key, hostname, room FROM {self.prefix}.dim_device WHERE device_id = :device_id LIMIT 1"
                 dev_rows, _, _ = db_manager.execute_query(sql_dev, params={"device_id": safe_dev_id}, cache_key=f"dev_meta_{safe_dev_id}")
                 if dev_rows:
+                    # Validation safety layer: validate server-resolved device_key format
                     device_key = validate_device_key(dev_rows[0]["device_key"])
                     device_name = dev_rows[0].get("hostname") or safe_dev_id
                     resolved_room = dev_rows[0].get("room")
@@ -237,18 +246,22 @@ class DatabricksService:
         params: Dict[str, Any] = {}
 
         if device_key:
+            # Prefer filtering by server-resolved device_key (safe surrogate key)
             base_conds.append("device_key = :device_key")
             params["device_key"] = device_key
         elif safe_room and safe_room != "all":
+            # Parameterized subquery: room is passed as named parameter :room
             base_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = :room)")
             params["room"] = safe_room
 
         if safe_from_ts and safe_from_ts > "2020-01-01 00:00:00":
+            # Parameterized time bounds: ISO-8601 strings validated and bound as :from_ts, :to_ts
             base_conds.append("event_timestamp >= :from_ts")
             base_conds.append("event_timestamp <= :to_ts")
             params["from_ts"] = safe_from_ts
             params["to_ts"] = safe_to_ts
         else:
+            # 'All' time range preset: no lower bound, safely upper-bounded by :to_ts
             base_conds.append("event_timestamp <= :to_ts")
             params["to_ts"] = safe_to_ts
 
@@ -428,16 +441,19 @@ class DatabricksService:
         Fetches downsampled or aggregated time series points for charting.
         Uses parameterized queries with strict validation.
         """
+        # Validation safety layer: strict input normalization and allowlisting
         safe_dev_id = validate_device_id(device_id)
         safe_metric = validate_metric(metric)
         safe_room = validate_room(room)
         safe_from_ts = validate_timestamp(from_ts)
         safe_to_ts = validate_timestamp(to_ts)
 
+        # Prefer filtering by server-resolved device_key
         device_key = self._resolve_device_key(safe_dev_id) if safe_dev_id != "all" else None
         cache_key = f"ts_{safe_metric}_{safe_dev_id}_{safe_room}_{safe_from_ts}_{safe_to_ts}"
 
-        # Choose table and column expressions via strict dictionary lookup (NO string interpolation from input)
+        # Validation safety layer: choose table and column expressions via strict dictionary lookup.
+        # No user-supplied strings are placed into SQL identifier or expression positions.
         METRIC_MAP = {
             "cpu": (f"{self.prefix}.fact_cpu_telemetry", "cpu_utilization_pct", "cpu_freq_current_mhz"),
             "ram": (f"{self.prefix}.fact_ram_telemetry", "ram_utilization_pct", "ram_used_bytes / 1073741824.0"),
@@ -457,22 +473,27 @@ class DatabricksService:
         params: Dict[str, Any] = {}
 
         if device_key:
+            # Prefer filtering by server-resolved device_key (safe surrogate key)
             where_conds.append("device_key = :device_key")
             params["device_key"] = device_key
         elif safe_room and safe_room != "all":
+            # Parameterized subquery: room passed as named parameter :room
             where_conds.append(f"device_key IN (SELECT device_key FROM {self.prefix}.dim_device WHERE room = :room)")
             params["room"] = safe_room
 
         if safe_metric == "battery":
+            # Battery gating: exclude records where battery is absent
             where_conds.append("battery_pct IS NOT NULL")
 
         # Time filter: if from_ts is very early (e.g. 2020-01-01), treat as no lower bound
         if safe_from_ts and safe_from_ts > "2020-01-01 00:00:00":
+            # Parameterized time bounds: ISO-8601 strings validated and bound as :from_ts, :to_ts
             where_conds.append("event_timestamp >= :from_ts")
             where_conds.append("event_timestamp <= :to_ts")
             params["from_ts"] = safe_from_ts
             params["to_ts"] = safe_to_ts
         else:
+            # 'All' time range preset: upper-bounded by :to_ts only
             where_conds.append("event_timestamp <= :to_ts")
             params["to_ts"] = safe_to_ts
 
@@ -498,7 +519,9 @@ class DatabricksService:
             trunc_grain = "minute"
             limit_points = 500
 
+        # Validation safety layer: safe_grain strictly validated against ALLOWED_TRUNC_GRAINS
         safe_grain = validate_trunc_grain(trunc_grain)
+        # Validation safety layer: safe_limit strictly cast to integer
         safe_limit = int(limit_points)
 
         sql = f"""

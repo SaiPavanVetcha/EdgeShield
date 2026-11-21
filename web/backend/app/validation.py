@@ -12,6 +12,9 @@ _ROOM_REGEX = re.compile(r"^[a-zA-Z0-9_\-\.\s]{1,64}$")
 # Safe regex pattern for server-resolved internal device keys (alphanumeric, hyphen, underscore)
 _DEVICE_KEY_REGEX = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
 
+# Safe regex pattern for alert identifiers (alphanumeric, hyphen, underscore, dot)
+_ALERT_ID_REGEX = re.compile(r"^[a-zA-Z0-9_\-\.]{1,64}$")
+
 # Strict allowlist of supported metrics for timeseries and KPI queries
 ALLOWED_METRICS = {
     "cpu",
@@ -64,10 +67,25 @@ def validate_room(room: Optional[str]) -> Optional[str]:
 def validate_device_key(device_key: Any) -> str:
     """
     Validates server-side resolved device_key.
+    Validation safety layer: ensures keys resolved from dim_device match safe alphanumeric pattern.
     """
     clean = str(device_key).strip()
     if not _DEVICE_KEY_REGEX.match(clean):
         raise ValueError(f"Invalid resolved device_key format: '{clean}'")
+    return clean
+
+
+def validate_alert_id(alert_id: Any) -> str:
+    """
+    Validates alert identifier length and character set.
+    Validation safety layer: restricts alert_id to alphanumeric, hyphen, underscore, dot (max 64 chars).
+    """
+    clean = str(alert_id).strip()
+    if not _ALERT_ID_REGEX.match(clean):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid alert_id. Must be between 1 and 64 characters (alphanumeric, hyphens, underscores, dots only).",
+        )
     return clean
 
 
