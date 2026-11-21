@@ -7,6 +7,20 @@ This folder contains a modular, responsive presentation website for presenting t
 
 ---
 
+## v1.1 Slide Alignment & Maintenance Note
+
+> [!IMPORTANT]
+> **Slide Deck v1.1 Alignment Requirement:**  
+> The presentation reflects the core architecture of EdgeShield. As the platform advances through the `v1.1-hardening` milestone, future visual updates to the presentation slides should incorporate the following newly verified production capabilities:
+>
+> 1. **Slide 1 (Hero / Architecture):** Highlight dual storage modes (`local` pilot vs. `databricks` cloud) and the embedded Server Console ops plane (`/console`).
+> 2. **Slide 3 (Solution Overview):** Illustrate the two-stage durable SQLite spooling architecture (client offline queue + server durable buffer) ensuring zero telemetry loss during network disconnections.
+> 3. **Slide 4 (Interactive Workflow):** Update the telemetry flow diagram to show local spooling before cloud batch writes, and acknowledge the runtime storage mode switcher.
+> 4. **Slide 5 (Gold Layer Star Schema):** Detail the new `room` dimension in `dim_device` and explain adaptive battery capability gating (suppressing battery KPIs/charts for stationary desktops).
+> 5. **Slide 6 (Product Roadmap):** Mark the v1.1 Hardening milestone as **Fully Operational** (durable spooling, transactional ingest, server console, parameterized SQL, room dimension, and battery gating), positioning v2 for mTLS/token auth, Delta-persisted alert state, and ML anomaly detection.
+
+---
+
 ## Development & Usage
 
 1. **Install dependencies (Node.js 18+):**
@@ -59,7 +73,7 @@ This application runs entirely client-side. No API keys, database credentials, o
 3. **Solution Overview:** Dual edge collection, asynchronous ingestion, Medallion lakehouse architecture, and real-time dashboard.
 4. **Complete Workflow:** Live embedded interactive architecture workflow demo (`public/workflow/index.html`).
 5. **Gold Layer & Why It Matters:** Star schema design (`dim_device` + 5 `fact_*` tables), independent sampling timestamps, and analytical queries.
-6. **Version Roadmap:** V1 (KPI dashboard & rules), V1.1 (security & spooling), V2 (ML anomaly detection and forecasting).
+6. **Version Roadmap:** V1.1 Hardened Observability (durable spool, server console, room dimension, safe SQL), V2 (ML anomaly detection), V3 (Natural Language Queries).
 7. **Summary & Closing:** EdgeShield summary and architectural takeaways.
 
 ---

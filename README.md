@@ -1,283 +1,243 @@
 # EdgeShield
 
-> **Edge-to-Lakehouse Telemetry and Intelligent Monitoring Platform**
-
-EdgeShield is an end-to-end edge observability and telemetry system designed to ingest, process, store, and visualize operational metrics from diverse computing endpoints — ranging from multi-core workstations and laptops to embedded Linux nodes and microcontroller hardware (ESP32) — into a Databricks Lakehouse architecture.
+> **Edge-to-Lakehouse Telemetry and Intelligent Monitoring Platform**  
+> *Production-hardened observability for heterogeneous edge computing and Databricks Lakehouse analytics.*
 
 ---
 
 ## What is EdgeShield?
 
-EdgeShield bridges the gap between low-level edge hardware telemetry and enterprise-grade data lakehouse analytics. It continuously collects host resource metrics (CPU, memory, disk, and battery health) along with ambient environmental conditions (temperature and humidity), ingests them through a high-throughput asynchronous server, transforms them across a Databricks Medallion pipeline (Bronze → Silver → Gold star schema), and serves actionable insights through a resilient real-time monitoring dashboard.
+EdgeShield is an edge-to-lakehouse observability platform that collects, buffers, and analyzes hardware health and environmental telemetry from heterogeneous computing endpoints — including multi-core workstations, laptops, embedded Linux systems, and ESP32 microcontrollers — into a Databricks Medallion Lakehouse architecture. The platform combines a lightweight, offline-resilient edge client with a dual-mode ingestion server featuring local durable spooling, a Medallion Star Schema on Databricks, and an operational web dashboard equipped with physical room filtering, battery capability gating, and SQL injection protections.
 
 ---
 
-## Problem It Solves
+## The Problem & The Solution
 
-Traditional observability stacks (such as Prometheus, Grafana, Datadog, or cloud-native metric agents) are optimized for server infrastructure, Kubernetes clusters, and always-on cloud VMs:
+### The Challenge of Edge Observability
+Traditional infrastructure monitoring frameworks (such as Prometheus, Grafana, Datadog, or cloud VM agents) were engineered for continuous cloud connectivity, homogeneous server hardware, and containerized microservices:
+* **Hardware Heterogeneity:** Edge fleets mix stationary workstations, battery-powered field laptops, and low-power microcontrollers (ESP32) that cannot run heavy agent daemons or complex network stacks.
+* **Network & Power Volatility:** Field endpoints experience intermittent Wi-Fi, cellular dropouts, and power cycling. Standard metric agents drop unacknowledged packets during network disconnects.
+* **Fragmented Telemetry Silos:** Compute resource utilization, battery degradation, and ambient physical conditions (temperature/humidity) are typically stored in separate tools, hindering unified root-cause analysis.
+* **Premature Aggregation:** Metric forwarders often downsample telemetry at ingest time, discarding raw event resolution necessary for long-term fleet analytics, predictive maintenance, and machine learning.
 
-* **Edge Heterogeneity:** Microcontrollers (ESP32) and small edge appliances cannot run heavy agent daemons, containers, or full TLS/daemon stacks.
-* **Network & Power Volatility:** Edge nodes experience transient connectivity, power constraints, and variable battery discharge rates that server agents ignore.
-* **Fragmented Telemetry:** Hardware health, battery degradation, and ambient physical conditions are often stored in disparate silos, preventing unified root-cause correlation.
-* **Lack of Historical Analytics & ML Readiness:** Standard metric collectors discard fine-grained history or downsample prematurely, making it difficult to run deep historical data engineering, fleet-wide aggregation, or predictive machine learning models.
-
-EdgeShield provides a unified, lightweight, and scalable path: edge devices post compact JSON payloads over HTTP, a central ingestion layer buffers and writes batches into Databricks, a Medallion ETL pipeline structures the data into an analytics-ready Gold star schema, and an auto-stop resilient web dashboard provides instant visibility.
-
----
-
-## Key Features
-
-* **Dual Edge Ingestion:**
-  * **PC Client Agent:** Modular Python collector (`psutil`, sysfs fallback) capturing CPU utilization and frequencies, RAM allocation, mount-point storage, system uptime, and detailed battery health metrics (charge percentage, power source, design vs. full-charge capacity, and degradation percentage).
-  * **ESP32 Microcontroller Node:** Lightweight C++/Arduino firmware sampling ambient temperature and relative humidity via a DHT11 sensor and dispatching HTTP JSON payloads.
-* **Asynchronous Central Ingestion Server:**
-  * FastAPI ingestion server buffering inbound telemetry in a thread-safe, non-blocking batch queue.
-  * Responds immediately (`< 10ms` HTTP 200) to edge nodes to conserve edge power and network sockets.
-  * Flushes telemetry in batches to Databricks SQL over a single pooled connection.
-* **Databricks Medallion Lakehouse Architecture:**
-  * **Bronze Layer:** Raw telemetry landing tables with ingestion timestamps and audit metadata.
-  * **Silver Layer:** Cleaned, deduplicated, schema-validated tables with null-safe battery normalization across operating systems.
-  * **Gold Layer:** Analytical star schema featuring a central device dimension (`dim_device`) and five decoupled fact tables (`fact_cpu_telemetry`, `fact_ram_telemetry`, `fact_disk_telemetry`, `fact_battery_telemetry`, `fact_environment_telemetry`).
-* **Resilient Web Dashboard & Analytics API:**
-  * FastAPI backend querying the Databricks Lakehouse Gold layer directly via the Databricks SQL Connector.
-  * **Databricks Free Tier Auto-Stop Resiliency:** In-memory fallback cache (3-minute TTL) prevents UI crashes when warehouses sleep, with automatic state classification (`online`, `starting`, `stopped`, `unconfigured`) and a one-click asynchronous wake-up trigger (`POST /api/health/wake-up`).
-  * Modern React 18 + Vite + TypeScript + Tailwind CSS user interface with responsive Recharts time-series visualizations, fleet vs. individual device scoping, and rule-based heuristic alerting.
-* **Documentation & Presentation Suite:**
-  * Comprehensive architecture specifications, academic project report PDF, and an interactive 7-slide Vite-based presentation website embedding a live telemetry workflow simulation.
+### The EdgeShield Solution
+EdgeShield establishes a unified, fault-tolerant telemetry pipeline designed specifically for edge operational realities:
+1. **Local-First Durability:** Dual-stage SQLite spooling on both edge clients and the central ingestion server buffers telemetry during disconnections and flushes in FIFO batches upon reconnection.
+2. **Transactional Cloud Synchronization:** Ingestion server writes to Databricks SQL landing tables are wrapped in all-or-nothing database transactions, preventing partial data writes and guaranteeing delivery before spool purging.
+3. **Medallion Star Schema:** Databricks Delta Lake organizes raw events into Bronze landing tables, validates and cleans records in Silver, and projects analytical facts and a room-aware device dimension (`dim_device`) in Gold.
+4. **Context-Aware Monitoring:** The dashboard automatically adapts to device capabilities — suppressing battery indicators for stationary desktops, segmenting fleet health by physical room, and maintaining responsiveness during cloud warehouse sleep cycles.
 
 ---
 
-## High-Level Architecture
+## System Architecture
 
 ```mermaid
 flowchart TD
     subgraph Edge ["Edge Tier"]
-        PC["PC Client Agent (Python)<br/>CPU · RAM · Disk · Battery · System"]
+        PC["PC Client Agent (Python)<br/>CPU · RAM · Disk · Battery · System<br/>Durable SQLite Spool (telemetry_spool.db)"]
         ESP["ESP32 Microcontroller (C++)<br/>DHT11 Ambient Temp & Humidity"]
     end
 
-    subgraph Ingest ["Ingestion Tier"]
+    subgraph Ingest ["Ingestion & Ops Tier"]
         Server["Central Server (FastAPI :5000)<br/>POST /metrics"]
-        Queue["In-Memory Thread-Safe Batch Queue<br/>Non-blocking Ingest & Buffer"]
-        Writer["Databricks Batch Writer<br/>INSERT INTO edgeshield_db.*"]
-        Server --> Queue --> Writer
+        ServerSpool["Durable SQLite Spool (server_spool.db)<br/>Sub-10ms Ingestion Buffer"]
+        Console["Server Console (Web Ops UI)<br/>GET / · GET /console"]
+        ModeSwitch{"Storage Mode<br/>(local vs. databricks)"}
+        TxWriter["Transactional Databricks Writer<br/>Atomic All-or-Nothing Commit"]
+
+        Server --> ServerSpool
+        ServerSpool --> ModeSwitch
+        ModeSwitch -->|local mode| LocalStore["Local Spool Retention & Ops Logs"]
+        ModeSwitch -->|databricks mode| TxWriter
+        Server -.-> Console
     end
 
     subgraph Lakehouse ["Databricks Medallion Lakehouse"]
-        Bronze["Bronze Layer<br/>Raw Ingestion + Metadata"]
+        Bronze["Bronze Layer<br/>Raw Ingestion + Ingest Timestamp"]
         Silver["Silver Layer<br/>Cleaned, Validated, Null-Safe Delta"]
-        Gold["Gold Layer (Star Schema)<br/>dim_device + 5x fact_* tables"]
+        Gold["Gold Layer (Star Schema)<br/>dim_device (with Room) + 5x fact_* tables"]
         Bronze --> Silver --> Gold
     end
 
-    subgraph WebApp ["Web & Analytics Tier"]
-        WebBackend["Web Backend (FastAPI :8000)<br/>Gold Layer Query Engine + Fallback Cache<br/>Warehouse Auto-Stop Detection & Wake-Up"]
-        WebFrontend["Web Frontend (React 18 + Tailwind)<br/>Fleet & Device Views · KPIs · Time Series · Alerts"]
+    subgraph WebApp ["Analytics & Monitoring Tier"]
+        WebBackend["Web Backend (FastAPI :8000)<br/>Parameterized SQL Engine · Fallback Cache<br/>Warehouse Sleep Detection & Wake-Up Trigger"]
+        WebFrontend["Web Frontend (React 18 + Vite + Tailwind)<br/>Fleet, Room & Device Scopes · Battery Gating · Alerts"]
         WebBackend --> WebFrontend
     end
 
     PC -->|HTTP POST JSON| Server
     ESP -->|HTTP POST JSON| Server
-    Writer -->|Batch SQL Writes| Bronze
-    Gold -->|Databricks SQL over HTTP| WebBackend
+    TxWriter -->|Batch SQL Inserts| Bronze
+    Gold -->|Parameterized Databricks SQL| WebBackend
 ```
 
 ### Telemetry Lifecycle
-1. **Collect:** Edge agents poll hardware registers and sensors at configurable intervals (default: 10s).
-2. **Buffer & Ingest:** The Central Ingestion Server receives payloads at `/metrics`, enqueues them in memory, returns `HTTP 200`, and flushes batches into Databricks `edgeshield_db`.
-3. **Refine:** Databricks ETL pipelines transform raw records through Bronze landing tables, clean and normalize metrics in Silver, and aggregate them into the Gold star schema.
-4. **Serve & Visualize:** The Web Backend queries the Gold layer, serves REST endpoints (`/api/devices`, `/api/kpis`, `/api/timeseries`, `/api/alerts`, `/api/health`), and the React Frontend renders real-time telemetry charts and alerts.
+1. **Edge Sampling & Client Spooling:** Edge agents sample system and ambient sensors at regular intervals (default: 10s). Records are committed to local SQLite before transmission over HTTP.
+2. **Immediate Server Buffering:** The Central Ingestion Server receives payloads at `POST /metrics`, records client IP and metadata in the in-memory device registry, commits to `server_spool.db`, and returns `HTTP 200` in `< 10ms`.
+3. **Storage Mode & Cloud Ingestion:**
+   - In **`local` mode**, telemetry remains safely buffered on the server host for local pilots and testing without cloud accounts.
+   - In **`databricks` mode**, the background worker executes transactional multi-table inserts into Databricks SQL. Records are deleted from the spool only after the transaction fully commits.
+4. **Lakehouse Refinement:** Medallion pipelines process raw landing tables through Silver validation to Gold star schema tables (`dim_device`, `fact_cpu_telemetry`, `fact_ram_telemetry`, `fact_disk_telemetry`, `fact_battery_telemetry`, `fact_environment_telemetry`).
+5. **Analytical Visualization:** The Web Backend runs parameterized queries against the Gold layer, serving the React dashboard with sub-second KPI aggregation, time series charting, and room-scoped fleet analysis.
 
 ---
 
-## Repository Structure
+## Key Capabilities
 
-```
-EdgeShield/
-├── client/                      # Modular PC telemetry agent (Python)
-│   ├── collectors/              # Individual collectors (battery, cpu, disk, ram, system)
-│   ├── client.py                # Main collection loop and HTTP transmission agent
-│   ├── config.py                # Client configuration and environment loader
-│   ├── .env.example             # Client environment template
-│   └── README.md                # Client agent guide
-├── server/                      # Central ingestion server (FastAPI)
-│   ├── routes/                  # Ingestion endpoints (POST /metrics)
-│   ├── server.py                # Server entrypoint and lifespan management
-│   ├── database.py              # In-memory batch queue and Databricks writer
-│   ├── config.py                # Server settings & connection credentials
-│   ├── .env.example             # Server environment template
-│   └── README.md                # Ingestion server guide
-├── firmware/                    # Microcontroller firmware (C++ / Arduino)
-│   └── esp32_dht11.ino          # ESP32 firmware for DHT11 environmental sensing
-├── edgeshield_etl_pipeline/     # Databricks Lakehouse transformations
-│   ├── ddl/                     # Catalog and schema DDL notebooks
-│   └── transformations/         # Medallion ETL scripts (Bronze, Silver, Gold)
-├── web/                         # Full-stack monitoring dashboard
-│   ├── backend/                 # FastAPI analytical backend querying Gold layer
-│   │   ├── app/                 # Routers, Databricks service, alert engine, config
-│   │   └── requirements.txt     # Python backend dependencies
-│   ├── frontend/                # React 18 + Vite + TypeScript dashboard
-│   │   ├── src/                 # Components, pages, hooks, services, types
-│   │   └── package.json         # Node.js frontend dependencies
-│   └── README.md                # Web workspace guide
-├── doc/                         # Documentation, project report, and presentation
-│   ├── presentation/            # Interactive 7-slide React presentation app
-│   ├── EdgeShield_Project_Report.pdf # Formal engineering report
-│   └── README.md                # Documentation guide
-├── requirements.txt             # Root Python dependencies pointer (client, server, web)
-├── LICENSE                      # MIT License
-└── README.md                    # Root project documentation (this file)
-```
+### 1. Dual-Stage Durable Spooling & Zero-Loss Ingest
+- **Edge Resilience:** If the server is offline or unreachable, the client buffers telemetry in a local SQLite database (`telemetry_spool.db`). Once restored, pending records drain automatically.
+- **Server Resilience:** The central server commits inbound payloads to `server_spool.db` before cloud transmission. If Databricks is unreachable or suspended, telemetry accumulates safely on disk.
+- **Transactional Atomicity:** All inserts for a single payload are bound to an atomic database transaction. Spool records are purged only on complete transaction success, eliminating partial data writes.
+
+### 2. Dual Storage Modes (Local Pilot vs. Databricks Lakehouse)
+- **Runtime Mode Switcher:** Operators can toggle between `local` and `databricks` storage modes via the Server Console UI or REST API (`POST /api/console/storage-mode`).
+- **Zero-Cloud Local Pilots:** In `local` mode, teams can evaluate edge client deployments, device discovery, and ingestion performance without configuring Databricks credentials.
+
+### 3. Physical Room Dimension (Location Segmentation)
+- **Full-Stack Location Tracking:** Clients declare an optional physical room tag (`ROOM=Lab-A`). The tag flows through ingestion landing tables, Silver cleaning, and into the Gold `dim_device` dimension.
+- **Dashboard Room Filtering:** Operators can filter the dashboard by individual room or view the entire fleet, scoping device lists, KPIs, and time-series charts to that specific physical area.
+
+### 4. Battery-Aware Intelligence
+- **Hardware-Adaptive Telemetry:** The client agent detects battery presence (`battery.present: true` on laptops; `false` on stationary desktops and servers). Stationary machines pass normalized `null` fields, preventing schema errors.
+- **Dynamic UI Suppression:** The web dashboard inspects device capabilities and automatically suppresses the Battery KPI card and "Power & Battery" chart for desktop machines, preventing false-positive low-battery alerts.
+
+### 5. Parameterized SQL & Defense-in-Depth Security
+- **Strict Query Parameterization:** The analytical backend passes all dynamic values (`:device_id`, `:device_key`, `:room`, `:from_ts`, `:to_ts`, `:window_ts`) through parameterized query markers.
+- **Allowlist & Type Enforcement:** Identifiers and room strings are validated against strict alphanumeric regexes; timestamps are parsed strictly as ISO-8601; metrics and grains are selected exclusively from immutable static dictionaries.
 
 ---
 
 ## Quick Start
 
-### 1. Central Ingestion Server
-The ingestion server receives telemetry from edge nodes and batches records into Databricks.
+### 1. Central Ingestion Server & Server Console
+The ingestion server receives telemetry from edge nodes and manages batch synchronization to Databricks.
 
 ```bash
 # Navigate to server directory
 cd server
 
-# Create and configure .env
-cp .env.example .env
-# Edit .env with your Databricks workspace credentials
-
-# Install server dependencies
+# Install dependencies (Python 3.11+)
 pip install -r requirements.txt
 
-# Run the ingestion server (default port: 5000)
+# Configure environment (Databricks credentials optional for local mode)
+cp .env.example .env
+
+# Start server (default: port 5000)
 python server.py
 ```
-*Health check:* Verify the server is running at [http://localhost:5000](http://localhost:5000).
+* **Landing Page:** [http://localhost:5000](http://localhost:5000)
+* **Server Console:** [http://localhost:5000/console](http://localhost:5000/console) (Overview, Device Registry, Spool Controls, and Logs)
 
 ---
 
 ### 2. PC Client Agent
-The PC client agent gathers host metrics and transmits them to the ingestion server.
+The modular Python agent runs on endpoints, collects hardware telemetry, and spools records locally.
 
 ```bash
 # Navigate to client directory
 cd client
 
-# Create and configure .env
-cp .env.example .env
-# Edit .env to set SERVER_IP, SERVER_PORT, and optional DEVICE_ID override
+# Recommended: Guided Interactive Setup (auto-configures venv, room tag, and auto-start)
+# On Linux/macOS:
+bash install/setup.sh
+# On Windows (PowerShell):
+powershell -ExecutionPolicy Bypass -File install\setup.ps1
 
-# Run the client agent
+# Alternatively, manual run:
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with SERVER_IP, optional ROOM, and DEVICE_ID
 python client.py
 ```
-By default, the client gathers system, CPU, memory, disk, and battery metrics every 10 seconds and transmits them to `http://<SERVER_IP>:5000/metrics`.
 
 ---
 
-### 3. ESP32 Environmental Firmware
-The ESP32 node collects ambient temperature and humidity and posts telemetry over Wi-Fi.
+### 3. ESP32 Microcontroller Node
+Samples ambient temperature and humidity via a DHT11 sensor and posts JSON over Wi-Fi.
 
-1. Open `firmware/esp32_dht11.ino` in the **Arduino IDE** or **PlatformIO**.
-2. Install required Arduino libraries:
-   * `DHT sensor library` (Adafruit)
-   * `Adafruit Unified Sensor`
-   * `ArduinoJson` (v6 or v7)
-3. Connect the DHT11 data pin to GPIO 4 (pin `D4`) on your ESP32 board.
-4. Update the Wi-Fi credentials and target ingestion server URL in `esp32_dht11.ino`:
-   ```cpp
-   const char* WIFI_SSID  = "YOUR_WIFI_SSID";
-   const char* WIFI_PASS  = "YOUR_WIFI_PASSWORD";
-   const char* SERVER_URL = "http://<SERVER_IP>:5000/metrics";
-   ```
-5. Select **ESP32 Dev Module**, choose your serial COM port, compile, and upload. Open the Serial Monitor at `115200` baud to observe sensor readings and transmission logs.
+1. Open `firmware/esp32_dht11.ino` in the Arduino IDE or PlatformIO.
+2. Install required libraries: `DHT sensor library` (Adafruit), `Adafruit Unified Sensor`, and `ArduinoJson`.
+3. Set your Wi-Fi SSID, password, and server URL (`http://<SERVER_IP>:5000/metrics`).
+4. Connect DHT11 data pin to GPIO 4 (`D4`) on your ESP32 board and flash the firmware.
 
 ---
 
-### 4. Web Dashboard & Analytics API
+### 4. Web Dashboard & Analytics Backend
 
-#### Start the Backend API
+#### Start Backend API
 ```bash
 # Navigate to web backend directory
 cd web/backend
 
-# Create and configure .env
-cp .env.example .env
-# Configure Databricks host, HTTP path, token, catalog, and schema
-
-# Install backend dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# Start FastAPI server on port 8000
+# Configure .env with Databricks SQL Warehouse credentials
+cp .env.example .env
+
+# Run backend service (port 8000)
 uvicorn app.main:app --reload --port 8000
 ```
-Interactive API documentation will be available at [http://localhost:8000/docs](http://localhost:8000/docs).
+*Swagger API Documentation:* [http://localhost:8000/docs](http://localhost:8000/docs)
 
-#### Start the Frontend UI
+#### Start Frontend UI
 ```bash
-# Open a new terminal and navigate to web frontend directory
+# Open a new terminal and navigate to frontend directory
 cd web/frontend
 
-# Install dependencies (Node.js 18+)
+# Install Node dependencies (Node.js 18+)
 npm install
 
-# Start the Vite development server (port 5173)
+# Start Vite development server (port 5173)
 npm run dev
 ```
-Open your browser to [http://localhost:5173](http://localhost:5173). The Vite dev server automatically proxies `/api` calls to the FastAPI backend running on port 8000.
+Open [http://localhost:5173](http://localhost:5173). The UI connects to the backend API via Vite proxy.
 
 ---
 
-## Configuration & Environment Variables
+## Component Map
 
-| Component | Variable | Required | Default | Description |
-| :--- | :--- | :---: | :--- | :--- |
-| **Server** | `HOST` | No | `0.0.0.0` | Host IP address to bind server socket |
-| **Server** | `PORT` | No | `5000` | Ingestion server listening port |
-| **Server** | `DATABRICKS_HOST` | **Yes** | — | Databricks workspace host (`dbc-xxxx.cloud.databricks.com`) |
-| **Server** | `DATABRICKS_HTTP_PATH` | **Yes** | — | SQL Warehouse HTTP Path (`/sql/1.0/warehouses/xxxx`) |
-| **Server** | `DATABRICKS_TOKEN` | **Yes** | — | Databricks Personal Access Token (`dapi...`) |
-| **Client** | `SERVER_IP` | **Yes** | `127.0.0.1` | IP address of central ingestion server |
-| **Client** | `SERVER_PORT` | No | `5000` | Port of central ingestion server |
-| **Client** | `SERVER_ENDPOINT` | No | `/metrics` | Target ingestion endpoint route |
-| **Client** | `DEVICE_ID` | No | `PC-<hostname>` | Unique device identifier override |
-| **Client** | `SAMPLING_INTERVAL_SECONDS` | No | `10` | Sampling cadence in seconds |
-| **Web Backend** | `DATABRICKS_HOST` | **Yes** | — | Databricks workspace host |
-| **Web Backend** | `DATABRICKS_HTTP_PATH` | **Yes** | — | SQL Warehouse HTTP Path |
-| **Web Backend** | `DATABRICKS_TOKEN` | **Yes** | — | Databricks Personal Access Token |
-| **Web Backend** | `DATABRICKS_CATALOG` | No | `edgeshield_lakehouse` | Unity Catalog catalog name |
-| **Web Backend** | `DATABRICKS_SCHEMA` | No | `gold` | Schema containing Gold star schema tables |
-| **Web Backend** | `PORT` | No | `8000` | Web API listening port |
-| **Web Backend** | `CACHE_TTL_SECONDS` | No | `180` | In-memory fallback query cache TTL |
-| **Web Backend** | `QUERY_TIMEOUT_SECONDS` | No | `45` | Databricks SQL query execution timeout |
-| **Web Backend** | `CORS_ORIGINS` | No | `http://localhost:5173,...` | Allowed CORS origins (comma-separated) |
+| Component | Path | Description | Tech Stack | Primary Documentation |
+| :--- | :--- | :--- | :--- | :--- |
+| **PC Client Agent** | [`client/`](client/) | Endpoint telemetry agent with offline SQLite spool and auto-start service installers | Python 3.11+, `psutil`, SQLite3 | [`client/README.md`](client/README.md) |
+| **Ingestion Server** | [`server/`](server/) | High-throughput ingestion, durable spooling, storage modes, and Server Console ops UI | FastAPI, SQLite3, Databricks SQL | [`server/README.md`](server/README.md) |
+| **Microcontroller Firmware** | [`firmware/`](firmware/) | Environmental sensor sampling (DHT11 temp/humidity) and HTTP dispatch | C++, Arduino, ESP32 | [`firmware/esp32_dht11.ino`](firmware/esp32_dht11.ino) |
+| **Lakehouse Pipeline** | [`edgeshield_etl_pipeline/`](edgeshield_etl_pipeline/) | Medallion DDL notebooks and transformation logic (Bronze → Silver → Gold) | Databricks SQL, Delta Lake, PySpark | [`edgeshield_etl_pipeline/`](edgeshield_etl_pipeline/) |
+| **Web Backend** | [`web/backend/`](web/backend/) | Analytical REST API querying Gold star schema with query cache and auto-stop wake-up | FastAPI, `databricks-sql-connector` | [`web/README.md`](web/README.md) |
+| **Web Frontend** | [`web/frontend/`](web/frontend/) | Interactive monitoring dashboard with fleet/room filters and battery capability gating | React 18, Vite, TypeScript, Tailwind | [`web/README.md`](web/README.md) |
+| **Presentation Suite** | [`doc/presentation/`](doc/presentation/) | Standalone 7-slide interactive presentation application with live workflow simulation | React, TypeScript, Vite | [`doc/presentation/README.md`](doc/presentation/README.md) |
+| **Pilot Specifications** | [`docs/`](docs/) | External reviewer evaluation brief, technical limitations, and pilot runbooks | Markdown | [`docs/PILOT_AND_LIMITATIONS.md`](docs/PILOT_AND_LIMITATIONS.md) |
 
 ---
 
-## Current V1 Limitations
+## Pilot & Operational Boundaries
 
-* **Plaintext HTTP Transmission:** Edge clients communicate over standard HTTP without mutual TLS (mTLS) or per-device signature tokens.
-* **In-Memory Volatility:** Ingestion server batch queues and web backend query caches reside strictly in process memory; process restarts drop pending unwritten batches.
-* **Databricks SQL Cold Starts:** When using Databricks Free Tier or Serverless SQL Warehouses that auto-stop on idle, initial queries after sleep take 15–45 seconds to spin up compute (handled gracefully by the UI cache and wake-up button).
-* **Ephemeral Alert Acknowledgments:** Acknowledged alerts in the Web Dashboard are tracked in backend memory rather than persisted to a database or Delta table.
-* **Static Firmware Configuration:** The ESP32 firmware relies on hardcoded Wi-Fi credentials and ingestion URLs defined at compile time.
+For full technical specifications for external reviewers, consult [**docs/PILOT_AND_LIMITATIONS.md**](docs/PILOT_AND_LIMITATIONS.md).
+
+* **Authentication Model:** In the current release, edge clients communicate over unauthenticated HTTP JSON, and the dashboard provides open monitoring access. For pilots, deployments should reside within a trusted LAN, VLAN, or behind a reverse proxy (e.g. NGINX with Basic Auth). Multi-tenant user auth and mTLS / device tokens are planned for v2.
+* **Databricks Free Tier Auto-Stop:** On Serverless or Free Tier SQL Warehouses that sleep during inactivity, initial queries after idle periods experience a 15–45 second spin-up latency. The web application mitigates this with an in-memory fallback cache (3-minute TTL) and a one-click **"Wake Up Warehouse"** button.
+* **Gold Room Schema Migration:** Environments upgrading from pre-v1.1 schemas require adding `room STRING` to `system_metrics` landing tables. Rebuilding `dim_device` from historical data populates room assignments for legacy devices.
 
 ---
 
-## Roadmap
+## Project Roadmap
 
-### V1.1 (Production Hardening)
-* **Ingestion Security:** HTTPS/TLS endpoint enforcement and shared-secret or token authentication (`X-Device-Token`) per edge device.
-* **Offline Client Spooling:** Local SQLite or file-based dead-letter spool on the PC client to prevent telemetry loss during network disconnects.
-* **Persistent Alert Lifecycle:** Persist alert state, acknowledgments, and rule history directly in a Delta table.
-* **Dynamic ESP32 Provisioning:** Implement a captive portal (e.g. WiFiManager) for on-device network and ingestion URL configuration without re-flashing.
-
-### V2 (Intelligence & Advanced Operations)
-* **Machine Learning & Anomaly Detection:** Deploy Databricks MLflow models to perform multivariate anomaly detection (e.g., Isolation Forests) across CPU, memory, and temperature spikes.
-* **Predictive Battery Health:** Battery cycle degradation forecasting using historical charge/discharge telemetry.
-* **Bidirectional Control Channel:** WebSockets or MQTT command plane allowing operators to adjust device sampling intervals or trigger edge self-tests remotely.
-* **Natural Language Lakehouse Queries:** Conversational AI query assistant integrated into the dashboard to analyze fleet telemetry using natural language.
+| Capability / Phase | v1.0 (Foundation) | v1.1 Hardening (Current) | v2 (Enterprise & Intelligence) |
+| :--- | :---: | :---: | :---: |
+| **Edge Hardware Telemetry** | CPU, RAM, Disk, Battery, ESP32 Temp/Humidity | Same + Battery presence detection & safe nulls | GPU metrics, fan speed, network I/O counters |
+| **Edge Offline Spooling** | In-memory only (lost on process exit) | **Durable SQLite spool (`telemetry_spool.db`)** | Dynamic bandwidth-throttled backoff |
+| **Server Ingestion Buffer** | In-memory batch queue | **Durable SQLite spool (`server_spool.db`)** | Distributed message broker (Kafka / Event Hub) |
+| **Cloud Synchronization** | Non-transactional batch writes | **Atomic multi-table transaction per payload** | Delta Live Tables streaming ingestion |
+| **Server Storage Modes** | Databricks only | **`local` (zero-cloud pilot) vs. `databricks`** | Hybrid tiered replication |
+| **Server Control Plane** | Raw `/` JSON status | **Server Console UI (`/` & `/console`) + REST APIs** | Centralized fleet configuration management |
+| **Physical Room Dimension** | Not supported | **Full-stack room tagging (`dim_device` & UI filter)** | Multi-facility hierarchical topology |
+| **Battery Intelligence** | Always assumed battery present | **Per-device capability gating & alert suppression** | Predictive battery degradation forecasting |
+| **SQL Security** | String interpolation | **Strict parameterized queries & allowlist validation** | Role-based column masking & Unity Catalog RBAC |
+| **Alert Engine** | In-memory heuristic rules | In-memory heuristic rules + battery gating | **Delta-persisted alert state & ML anomaly detection** |
+| **Device Authentication** | None (Plaintext HTTP) | None (Internal LAN / VPN pilot topology) | **Mutual TLS (mTLS) & Per-Device API Tokens** |
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
-
+EdgeShield is released under the [MIT License](LICENSE).

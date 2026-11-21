@@ -1,72 +1,130 @@
-# EdgeShield Central Ingestion Server
+# EdgeShield Central Ingestion Server & Server Console
 
-> **High-throughput FastAPI ingestion service with durable SQLite spooling and Databricks SQL batching.**  
+> **High-throughput FastAPI ingestion service with durable SQLite spooling, dual storage modes, and operational Server Console.**  
 > For the overall system architecture and end-to-end pipeline, see the [Root README](../README.md).
 
-The Central Ingestion Server receives real-time telemetry payloads over HTTP from edge devices (PC clients and ESP32 microcontrollers). It commits incoming payloads immediately to a local SQLite durable spool (`spool/server_spool.db`) to return rapid sub-10ms `200 OK` responses. A background worker thread flushes batches of records into Databricks SQL landing tables, ensuring zero telemetry loss during process restarts or Databricks outages.
+The Central Ingestion Server receives real-time telemetry payloads over HTTP from edge devices (PC clients and ESP32 microcontrollers). It commits incoming payloads immediately to a local SQLite durable spool (`spool/server_spool.db`) to return rapid sub-10ms `HTTP 200` responses. A background worker flushes batches into Databricks SQL landing tables with atomic transaction semantics, or operates in local mode for zero-cloud pilot testing.
+
+---
+
+## Architectural Highlights
+
+1. **Durable Local Spooling (`server_spool.db`):** Inbound telemetry is durably committed to SQLite before cloud transmission. Network partitions or Databricks outages never drop edge data.
+2. **Transactional All-or-Nothing Cloud Ingest:** Multi-table inserts (system, CPU, RAM, disk, battery, environment) for a single payload are executed within an atomic database transaction. Spool records are deleted only after the transaction fully commits.
+3. **Dual Storage Modes (`local` vs. `databricks`):**
+   - **`local` Mode:** Telemetry is durably spooled on disk and tracked in the in-memory device registry without connecting to Databricks. Enables instant local pilot testing without cloud accounts or credentials.
+   - **`databricks` Mode:** Spooled records are flushed periodically to the Databricks Lakehouse landing tables.
+   - Storage mode can be switched dynamically at runtime via the Server Console or REST API (`POST /api/console/storage-mode`).
+4. **Server Console Control Plane:** Built-in web operations interface accessible at `http://<SERVER_IP>:5000/console` featuring tabbed views for system overview, connected devices, spool metrics, manual flush triggers, and live logs.
+5. **Physical Room Dimension:** Ingests top-level `room` metadata from payloads, stores it in `edgeshield_db.system_metrics`, and feeds the Gold layer `dim_device` location dimension.
 
 ---
 
 ## Requirements
 
-* **Python:** 3.11+ (standard library SQLite3 used for spooling)
-* **Databricks:** Active SQL Warehouse (Free Tier Serverless, Pro, or Classic) with `edgeshield_db` schema
-* **Dependencies:** `fastapi`, `uvicorn`, `databricks-sql-connector`, `pydantic`, `python-dotenv` (specified in [`requirements.txt`](requirements.txt))
+* **Python:** 3.11+
+* **Dependencies:** `fastapi`, `uvicorn`, `databricks-sql-connector`, `pydantic`, `python-dotenv` (see [`requirements.txt`](requirements.txt))
+* **Databricks (Optional for Local Mode, Required for Cloud Mode):** Active SQL Warehouse with `edgeshield_db` schema
 
 ---
 
 ## Setup & Execution
 
-1. **Install dependencies:**
-   From the `server` directory (inside your virtual environment):
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. Install Dependencies
+```bash
+cd server
+pip install -r requirements.txt
+```
 
-2. **Configure environment variables:**
-   Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
+### 2. Configure Environment (`.env`)
+Copy the environment template:
+```bash
+cp .env.example .env
+```
 
-   Populate your Databricks SQL Warehouse connection details and spooling parameters:
-   ```ini
-   HOST=0.0.0.0
-   PORT=5000
+Configure parameters in `.env`:
+```ini
+HOST=0.0.0.0
+PORT=5000
 
-   DATABRICKS_HOST=dbc-xxxxxxxx-xxxx.cloud.databricks.com
-   DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/xxxxxxxxxxxxxxxx
-   DATABRICKS_TOKEN=dapi_your_personal_access_token_here
+# Storage Mode: "local" (no cloud required) or "databricks"
+STORAGE_MODE=databricks
 
-   # Durable Spool & Batching Settings
-   SPOOL_DIR=./spool
-   FLUSH_INTERVAL_SECONDS=5.0
-   FLUSH_MAX_RECORDS=20
-   SPOOL_MAX_RECORDS=10000
-   ```
+# Databricks SQL Warehouse (Required if STORAGE_MODE=databricks)
+DATABRICKS_HOST=dbc-xxxxxxxx-xxxx.cloud.databricks.com
+DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/xxxxxxxxxxxxxxxx
+DATABRICKS_TOKEN=dapi_your_personal_access_token_here
 
-3. **Start the server:**
-   ```bash
-   python server.py
-   ```
-   The server will start listening on `http://0.0.0.0:5000` with auto-reloading enabled.
+# Durable Spool & Batching Settings
+SPOOL_DIR=./spool
+FLUSH_INTERVAL_SECONDS=5.0
+FLUSH_MAX_RECORDS=20
+SPOOL_MAX_RECORDS=10000
+```
+
+### 3. Start the Server
+```bash
+python server.py
+```
+The service will start listening on `http://0.0.0.0:5000`.
 
 ---
 
-## Durable Ingestion & Databricks Outage Resiliency
+## Server Console & Operations UI
 
-The server decouples edge payload reception from cloud warehouse writes:
+The ingestion server provides a lightweight, dependency-free web console for operators:
 
-1. **Durability First:** `POST /metrics` validates `device_id` and immediately commits the payload to the local SQLite database (`server_spool.db`). Control is returned to the client in `< 5ms` with `HTTP 200`.
-2. **Batch Flushes:** The background flush worker opens a single pooled Databricks SQL connection and flushes records when:
-   * `FLUSH_INTERVAL_SECONDS` elapses (default: 5.0s), **OR**
-   * Total pending records reach `FLUSH_MAX_RECORDS` (default: 20 records).
-3. **Atomic Deletion & Retry:** Records are only deleted from the SQLite spool once successfully inserted into Databricks. If the warehouse is auto-stopped, sleeping, or temporarily unreachable, the worker logs the error, leaves all unwritten records in the spool, and retries on the next flush cycle.
-4. **Crash Recovery on Startup:** Whenever the server process boots, it scans the spool for pending records from prior runs and attempts an immediate flush before starting the background loop.
-5. **Retention Protection:** If the spool reaches `SPOOL_MAX_RECORDS` (default: 10000), the oldest records are trimmed to protect host storage and a warning is logged.
+* **Landing Page (`http://localhost:5000`):** Modern status landing page displaying server online state, active storage mode, pending spool records, connected device count, and a direct CTA to open the console.
+* **Operational Console (`http://localhost:5000/console`):** Tabbed control interface:
+  * **Overview Tab:** System uptime, storage mode switcher (toggle between `local` and `databricks`), spool summary, and last flush status.
+  * **Devices Tab:** Live registry of all endpoints sending telemetry (device ID, hostname, platform, assigned room, client IP, last seen timestamp, and online/offline status badge).
+  * **Spool Tab:** Pending queue metrics, capacity limits, and a **"Flush Now"** manual trigger.
+  * **Logs Tab:** Live auto-refreshing log tail from the server's in-memory ring buffer.
 
-> [!NOTE]
-> **Spool Directory Location:** By default, the local SQLite spool lives under `server/spool/` (`server_spool.db`), resolved relative to the server package directory (`BASE_DIR`). This guarantees the spool database is always created inside the server folder regardless of your process current working directory.
+---
+
+## Local Pilot Mode (Zero Cloud Setup)
+
+To run a standalone pilot without configuring Databricks:
+
+1. In `.env`, set `STORAGE_MODE=local` (or toggle to Local in the Server Console).
+2. Start the server: `python server.py`.
+3. Open `http://localhost:5000/console` to confirm `Storage Mode: Local`.
+4. Point client agents (`client/client.py`) to `http://localhost:5000/metrics`.
+5. Observe incoming endpoints populate the **Devices** tab and records buffer in the **Spool** tab.
+6. When ready to connect to cloud, configure Databricks credentials and switch the mode to `databricks` via the console. Existing spooled records will flush to Databricks automatically.
+
+---
+
+## REST API Reference
+
+### Telemetry Ingestion
+* **`POST /metrics`**  
+  Ingests a hardware telemetry payload. Returns `HTTP 200` once safely committed to local spool:
+  ```json
+  {
+    "device_id": "PC-LAB-01",
+    "hostname": "workstation-alpha",
+    "room": "Lab-101",
+    "timestamp": "2026-11-20T10:00:00Z",
+    "metrics": {
+      "system": { "platform": "Windows", "uptime_seconds": 86400 },
+      "cpu": { "cpu_utilization_pct": 24.5 },
+      "ram": { "ram_utilization_pct": 58.2 },
+      "disk": { "disk_utilization_pct": 68.0 },
+      "battery": { "present": true, "battery_pct": 92.0, "power_plugged": true }
+    }
+  }
+  ```
+
+### Health & Console APIs
+* **`GET /`** — Landing page HTML (or JSON if `Accept: application/json` is passed).
+* **`GET /console`** — Tabbed Server Console HTML.
+* **`GET /api/console/status`** — System status, uptime, storage mode, spool counts, online device metrics.
+* **`GET /api/console/devices`** — Device registry array sorted by `last_seen_utc` descending.
+* **`POST /api/console/storage-mode`** — Updates storage mode (`{"mode": "local" | "databricks"}`).
+* **`POST /api/console/flush`** — Triggers an immediate spool flush cycle.
+* **`GET /api/console/logs`** — Returns recent server log entries from the in-memory ring buffer.
 
 ---
 
@@ -76,75 +134,27 @@ The server decouples edge payload reception from cloud warehouse writes:
 | :--- | :---: | :--- | :--- |
 | `HOST` | No | `0.0.0.0` | IP address to bind the server socket |
 | `PORT` | No | `5000` | Ingestion server listening port |
-| `DATABRICKS_HOST` | **Yes** | — | Databricks workspace host (e.g., `dbc-xxxx.cloud.databricks.com`) |
-| `DATABRICKS_HTTP_PATH` | **Yes** | — | SQL Warehouse HTTP path (`/sql/1.0/warehouses/xxxx`) |
-| `DATABRICKS_TOKEN` | **Yes** | — | Databricks Personal Access Token (`dapi...`) |
-| `SPOOL_DIR` | No | `server/spool` | Directory path where `server_spool.db` is stored (default: `server/spool` relative to server package) |
+| `STORAGE_MODE` | No | `databricks` | Storage mode: `local` or `databricks` |
+| `DATABRICKS_HOST` | Conditional | — | Workspace host (required if `STORAGE_MODE=databricks`) |
+| `DATABRICKS_HTTP_PATH` | Conditional | — | SQL Warehouse HTTP path |
+| `DATABRICKS_TOKEN` | Conditional | — | Databricks Personal Access Token |
+| `SPOOL_DIR` | No | `server/spool` | Directory path where `server_spool.db` is stored |
 | `FLUSH_INTERVAL_SECONDS` | No | `5.0` | Interval between Databricks flush attempts (seconds) |
 | `FLUSH_MAX_RECORDS` | No | `20` | Batch size threshold that triggers an immediate flush |
 | `SPOOL_MAX_RECORDS` | No | `10000` | Maximum durable spool capacity before trimming oldest records |
 
 ---
 
-## Endpoints & Health Check
+## Schema & Room Migration
 
-* **Health Check & Spool Status:**
-  ```http
-  GET /
-  ```
-  Returns server health, pending spool queue count, and last flush status:
-  ```json
-  {
-    "status": "online",
-    "system": "EdgeShield Server Backend",
-    "spool": {
-      "pending": 0,
-      "max_records": 10000,
-      "flush_interval_seconds": 5.0,
-      "flush_max_records": 20,
-      "last_flush": {
-        "timestamp": "2026-11-18T12:00:00+00:00",
-        "inserted": 20,
-        "failed": 0,
-        "success": true
-      }
-    }
-  }
-  ```
+The ingestion server records location metadata via the `room` column:
+* **Ingestion Table:** `edgeshield_db.system_metrics`
+* **Bronze Lakehouse Table:** `edgeshield_lakehouse.bronze.system_metrics`
 
-* **Telemetry Ingestion:**
-  ```http
-  POST /metrics
-  ```
-  Receives JSON telemetry payloads containing `device_id`, optional `room`, and hardware `metrics`. Durably enqueues payload to local SQLite spool and returns `HTTP 200` immediately:
-  ```json
-  {
-    "status": "success",
-    "message": "Telemetry spooled for Databricks persistence",
-    "device_id": "PC-WORKSTATION-01",
-    "room": "Lab-A"
-  }
-  ```
-
----
-
-## Schema & Lakehouse Migration (Room Metadata Support)
-
-The ingestion server and Lakehouse pipeline support end-to-end telemetry location tracking via the `room` column:
-* **Payload Reception:** The ingestion server receives client JSON payloads containing top-level `"room"` (e.g. `"Lab-A"`). Empty or whitespace-only strings are automatically normalized to `NULL`.
-* **Database Ingestion:** The background flush worker writes `room` into `edgeshield_db.system_metrics`. If targeting an unmigrated table where the column is missing, it automatically falls back to omitting `room` to prevent batch failure.
-* **Lakehouse Pipeline:** Bronze streams `room` into Silver (`cleaned_system_metrics`), and Gold computes the latest non-null room per device in `dim_device`.
-
-### Applying DDL Migration to Existing Databricks Environments
-
-If your Databricks workspace was initialized with an earlier schema version, apply these DDL migration statements to add the nullable `room STRING` column:
-
+If upgrading an existing Databricks deployment, apply these DDL statements in a Databricks SQL notebook:
 ```sql
--- 1. Ingestion landing table (edgeshield_db)
 ALTER TABLE edgeshield_db.system_metrics ADD COLUMN IF NOT EXISTS room STRING;
-
--- 2. Bronze lakehouse table (edgeshield_lakehouse)
 ALTER TABLE edgeshield_lakehouse.bronze.system_metrics ADD COLUMN IF NOT EXISTS room STRING;
 ```
 
-Fresh Lakehouse deployments using `edgeshield_etl_pipeline/ddl/ddl_edgeshield_db.ipynb` and `ddl_edgeshield_lakehouse.ipynb` already include `room STRING` in `system_metrics`.
+Fresh Lakehouse deployments using `edgeshield_etl_pipeline/ddl/` already include `room STRING`.

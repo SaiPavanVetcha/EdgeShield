@@ -33,30 +33,30 @@ export const Slide6Roadmap: React.FC = () => {
 
             <div className="text-xs font-mono text-cyan-400 uppercase tracking-wider mb-1">Phase 1</div>
             <h3 className="text-xl font-extrabold text-white mb-2">
-              V1: Core Observability
+              V1.1: Hardened Observability
             </h3>
             <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-              Real-time monitoring and deterministic threshold alerting on Gold layer facts.
+              Durable edge spooling, Server Console control plane, and room-aware Gold analytics.
             </p>
 
             <ul className="space-y-3 text-sm text-slate-200">
               <li className="flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <span><strong className="text-white">Clean KPI Dashboard:</strong> CPU, RAM, Disk, Battery, and Environment gauges.</span>
+                <span><strong className="text-white">Durable Spool & Console:</strong> Dual-mode local/cloud ingestion and web ops plane.</span>
               </li>
               <li className="flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <span><strong className="text-white">Device Selector:</strong> Dynamic filters with configurable time ranges.</span>
+                <span><strong className="text-white">Room & Battery Gating:</strong> Physical room segmentation and desktop battery suppression.</span>
               </li>
               <li className="flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <span><strong className="text-white">Rules-Based Alerts:</strong> Instant notifications for critical limits.</span>
+                <span><strong className="text-white">Safe Parameterized SQL:</strong> Injection-hardened queries and warehouse sleep resilience.</span>
               </li>
             </ul>
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-800 text-xs font-mono text-cyan-300">
-            Status: Fully Operational
+            Status: Fully Operational (v1.1 Hardened)
           </div>
         </div>
 
