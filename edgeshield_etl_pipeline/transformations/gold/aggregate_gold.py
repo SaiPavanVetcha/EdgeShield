@@ -30,18 +30,15 @@ def dim_device():
         .select("device_id", "hostname", "platform", "boot_time_utc")
     )
 
-    # Latest non-null room per device_id
-    if "room" in sys_df.columns:
-        room_window = Window.partitionBy("device_id").orderBy(col("timestamp").desc())
-        room_latest = (
-            sys_df.filter(col("room").isNotNull() & (trim(col("room")) != ""))
-            .withColumn("rn", row_number().over(room_window))
-            .filter(col("rn") == 1)
-            .select("device_id", trim(col("room")).alias("room"))
-        )
-        sys_with_room = sys_latest.join(room_latest, "device_id", "left")
-    else:
-        sys_with_room = sys_latest.withColumn("room", lit(None).cast("string"))
+    # Latest non-null room per device_id (prevents overwriting known room with null on sparse pings)
+    room_window = Window.partitionBy("device_id").orderBy(col("timestamp").desc())
+    room_latest = (
+        sys_df.filter(col("room").isNotNull() & (trim(col("room")) != ""))
+        .withColumn("rn", row_number().over(room_window))
+        .filter(col("rn") == 1)
+        .select("device_id", trim(col("room")).alias("room"))
+    )
+    sys_with_room = sys_latest.join(room_latest, "device_id", "left")
 
     cpu_specs = cpu_df.select("device_id", "logical_cores", "physical_cores").dropDuplicates(["device_id"])
 

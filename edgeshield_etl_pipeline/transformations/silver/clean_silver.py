@@ -8,16 +8,14 @@ SILVER_SCHEMA = spark.conf.get("edgeshield.silver_schema", "silver")
 SILVER_TABLE_PROPERTIES = {
     "quality": "silver",
     "layer": "silver",
-    "delta.enableChangeDataFeed": "true"
+    "delta.enableChangeDataFeed": "true",
 }
 
-# =========================================================================
-# 1. Environment Metrics
-# =========================================================================
+# ----- Environment -----
 dp.create_streaming_table(
     name=f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_environment_metrics",
-    comment="Cleaned and incrementally deduplicated environment metrics",
-    table_properties=SILVER_TABLE_PROPERTIES
+    comment="Cleaned environment metrics",
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 @dp.temporary_view()
@@ -34,49 +32,43 @@ dp.apply_changes(
     source="environment_metrics_silver_cleaned",
     keys=["event_id"],
     sequence_by=col("timestamp"),
-    stored_as_scd_type=1
+    stored_as_scd_type=1,
 )
 
-
-# =========================================================================
-# 2. System Metrics
-# =========================================================================
+# ----- System (room normalized) -----
 dp.create_streaming_table(
     name=f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_system_metrics",
-    comment="Cleaned and incrementally deduplicated system metrics",
-    table_properties=SILVER_TABLE_PROPERTIES
+    comment="Cleaned system metrics with room",
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 @dp.temporary_view()
 @dp.expect_or_drop("valid_device", "device_id IS NOT NULL")
-@dp.expect_or_drop("valid_hostname", "hostname IS NOT NULL")
 def system_metrics_silver_cleaned():
     raw_df = dp.read_stream(f"{TARGET_CATALOG}.{BRONZE_SCHEMA}.system_metrics")
+    # hostname can be null for some edge cases; do not drop on hostname
     if "room" in raw_df.columns:
-        cleaned_df = raw_df.withColumn(
+        cleaned = raw_df.withColumn(
             "room",
-            when(trim(col("room")) == "", None).otherwise(trim(col("room")))
+            when(col("room").isNull() | (trim(col("room")) == ""), lit(None)).otherwise(trim(col("room"))),
         )
     else:
-        cleaned_df = raw_df.withColumn("room", lit(None).cast("string"))
-    return cleaned_df.withColumn("_processed_at", current_timestamp())
+        cleaned = raw_df.withColumn("room", lit(None).cast("string"))
+    return cleaned.withColumn("_processed_at", current_timestamp())
 
 dp.apply_changes(
     target=f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_system_metrics",
     source="system_metrics_silver_cleaned",
     keys=["event_id"],
     sequence_by=col("timestamp"),
-    stored_as_scd_type=1
+    stored_as_scd_type=1,
 )
 
-
-# =========================================================================
-# 3. CPU Metrics
-# =========================================================================
+# ----- CPU -----
 dp.create_streaming_table(
     name=f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_cpu_metrics",
-    comment="Cleaned and incrementally deduplicated CPU metrics",
-    table_properties=SILVER_TABLE_PROPERTIES
+    comment="Cleaned CPU metrics",
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 @dp.temporary_view()
@@ -93,17 +85,14 @@ dp.apply_changes(
     source="cpu_metrics_silver_cleaned",
     keys=["event_id"],
     sequence_by=col("timestamp"),
-    stored_as_scd_type=1
+    stored_as_scd_type=1,
 )
 
-
-# =========================================================================
-# 4. RAM Metrics
-# =========================================================================
+# ----- RAM -----
 dp.create_streaming_table(
     name=f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_ram_metrics",
-    comment="Cleaned and incrementally deduplicated RAM metrics",
-    table_properties=SILVER_TABLE_PROPERTIES
+    comment="Cleaned RAM metrics",
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 @dp.temporary_view()
@@ -120,22 +109,18 @@ dp.apply_changes(
     source="ram_metrics_silver_cleaned",
     keys=["event_id"],
     sequence_by=col("timestamp"),
-    stored_as_scd_type=1
+    stored_as_scd_type=1,
 )
 
-
-# =========================================================================
-# 5. Disk Metrics
-# =========================================================================
+# ----- Disk -----
 dp.create_streaming_table(
     name=f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_disk_metrics",
-    comment="Cleaned and incrementally deduplicated Disk metrics",
-    table_properties=SILVER_TABLE_PROPERTIES
+    comment="Cleaned disk metrics",
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 @dp.temporary_view()
 @dp.expect_or_drop("valid_device", "device_id IS NOT NULL")
-@dp.expect_or_drop("valid_mount", "mount_point IS NOT NULL")
 def disk_metrics_silver_cleaned():
     return (
         dp.read_stream(f"{TARGET_CATALOG}.{BRONZE_SCHEMA}.disk_metrics")
@@ -147,17 +132,14 @@ dp.apply_changes(
     source="disk_metrics_silver_cleaned",
     keys=["event_id"],
     sequence_by=col("timestamp"),
-    stored_as_scd_type=1
+    stored_as_scd_type=1,
 )
 
-
-# =========================================================================
-# 6. Battery Metrics
-# =========================================================================
+# ----- Battery -----
 dp.create_streaming_table(
     name=f"{TARGET_CATALOG}.{SILVER_SCHEMA}.cleaned_battery_metrics",
-    comment="Cleaned and incrementally deduplicated Battery metrics",
-    table_properties=SILVER_TABLE_PROPERTIES
+    comment="Cleaned battery metrics",
+    table_properties=SILVER_TABLE_PROPERTIES,
 )
 
 @dp.temporary_view()
@@ -173,5 +155,5 @@ dp.apply_changes(
     source="battery_metrics_silver_cleaned",
     keys=["event_id"],
     sequence_by=col("timestamp"),
-    stored_as_scd_type=1
+    stored_as_scd_type=1,
 )
