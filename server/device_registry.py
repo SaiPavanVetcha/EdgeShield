@@ -39,10 +39,20 @@ def upsert_from_request(payload: dict, client_ip: str) -> Optional[Dict[str, Any
         or (system_metrics.get("hostname") if isinstance(system_metrics, dict) else None)
         or "unknown"
     )
-    device_type = payload.get("type") or "pc_telemetry"
+    raw_type = payload.get("type")
+    if raw_type:
+        device_type = raw_type
+    elif isinstance(metrics, dict) and any(k in metrics for k in ("dht11", "dht22", "environment")):
+        device_type = "esp32_telemetry"
+    elif str(device_id).lower().startswith("esp32"):
+        device_type = "esp32_telemetry"
+    else:
+        device_type = "pc_telemetry"
+
     platform = (
         payload.get("platform")
         or (system_metrics.get("platform") if isinstance(system_metrics, dict) else None)
+        or ("ESP32" if "esp32" in str(device_type).lower() or (isinstance(metrics, dict) and any(k in metrics for k in ("dht11", "dht22"))) else None)
     )
     room = payload.get("room")
     now_utc = datetime.now(timezone.utc)

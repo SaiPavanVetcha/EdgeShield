@@ -85,6 +85,14 @@ def insert_single_payload(cursor, payload: Dict[str, Any], connection: Optional[
     battery = metrics.get("battery") or {}
     dht_data = metrics.get("dht11") or metrics.get("dht22") or {}
 
+    # If system metrics are omitted (e.g. lightweight ESP32 node), register device/room in system_metrics
+    # so that dim_device in the Gold lakehouse can discover and attribute this node's room.
+    if not system and (dht_data or payload.get("platform") == "ESP32" or str(payload.get("type", "")).startswith("esp32")):
+        system = {
+            "platform": payload.get("platform") or "ESP32",
+            "boot_time_utc": None,
+        }
+
     # 1. System metrics
     if system:
         if _has_room_column is False:

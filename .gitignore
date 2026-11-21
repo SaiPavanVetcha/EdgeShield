@@ -18,6 +18,10 @@ ENV/
 !.env.example
 *.pem
 *.key
+firmware/config.h
+config.h
+!firmware/config.h.example
+!config.h.example
 
 # Databricks & Spark artifacts
 .databricks/

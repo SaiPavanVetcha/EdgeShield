@@ -1,0 +1,36 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// ==============================================================================
+// EdgeShield ESP32 Firmware Configuration
+//
+// INSTRUCTIONS:
+// 1. Copy this file to 'config.h' in the same folder:
+//      cp config.h.example config.h
+// 2. Customize your local Wi-Fi credentials and EdgeShield Server IP/Port below.
+// 3. 'config.h' is gitignored to prevent accidental credential commits.
+// ==============================================================================
+
+// --- Wi-Fi Network Credentials ---
+const char* const WIFI_SSID = "YOUR_WIFI_SSID";
+const char* const WIFI_PASS = "YOUR_WIFI_PASSWORD";
+
+// --- EdgeShield Ingestion Server Endpoint ---
+// Replace with the IP and port of your EdgeShield Ingestion Server
+const char* const SERVER_URL = "http://192.168.1.100:5000/metrics";
+
+// --- Device Identity & Location (Consistent with PC Client Agent) ---
+const char* const DEVICE_ID = "ESP32-ENV-01";
+const char* const HOSTNAME  = "esp32-dht11-node";
+const char* const ROOM      = "Server-Room";       // Physical location (e.g. "Lab-101", "Server-Room")
+const char* const DEV_TYPE  = "esp32_telemetry";   // Telemetry payload type
+const char* const PLATFORM  = "ESP32";
+
+// --- Sensor Hardware Configuration ---
+#define DHTPIN 4          // GPIO pin connected to DHT data pin (e.g., GPIO 4 / D4)
+#define DHTTYPE DHT11     // DHT sensor type (DHT11, DHT22, or DHT21)
+
+// --- Telemetry Cadence ---
+const unsigned long SAMPLING_INTERVAL_MS = 10000; // 10 seconds
+
+#endif // CONFIG_H

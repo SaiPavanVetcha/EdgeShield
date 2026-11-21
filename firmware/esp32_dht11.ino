@@ -3,16 +3,18 @@
 #include <DHT.h>
 #include <ArduinoJson.h>
 
-const char* WIFI_SSID = "sai pavan";
-const char* WIFI_PASS = "pass";
-const char* SERVER_URL = "http://10.188.222.228:5000/metrics";
+// Include local configuration (gitignored). If absent, fall back to config.h.example
+#if __has_include("config.h")
+  #include "config.h"
+#else
+  #include "config.h.example"
+  #warning "config.h not found; falling back to config.h.example. Copy config.h.example to config.h to configure your credentials."
+#endif
 
-#define DHTPIN 4          // Pin labeled D4
-#define DHTTYPE DHT11     // ← DHT11
 DHT dht(DHTPIN, DHTTYPE);
 
 void connectWiFi() {
-  Serial.print("Connecting to: ");
+  Serial.print("Connecting to Wi-Fi SSID: ");
   Serial.println(WIFI_SSID);
 
   WiFi.mode(WIFI_STA);
@@ -36,14 +38,21 @@ void connectWiFi() {
     Serial.print(WiFi.RSSI());
     Serial.println(" dBm");
   } else {
-    Serial.println("\n[-] Wi-Fi Connection Failed!");
+    Serial.println("\n[-] Wi-Fi Connection Failed! Check SSID and password in config.h.");
   }
 }
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n\n===== ESP32 + DHT11 Telemetry =====");
+  Serial.println("\n\n========================================");
+  Serial.println("   EdgeShield ESP32 Environmental Node  ");
+  Serial.println("========================================");
+  Serial.printf("Device ID : %s\n", DEVICE_ID);
+  Serial.printf("Hostname  : %s\n", HOSTNAME);
+  Serial.printf("Room      : %s\n", ROOM);
+  Serial.printf("Server URL: %s\n", SERVER_URL);
+  Serial.println("----------------------------------------");
 
   dht.begin();
   connectWiFi();
@@ -51,7 +60,7 @@ void setup() {
 
 void loop() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[!] Wi-Fi lost. Reconnecting...");
+    Serial.println("[!] Wi-Fi connection lost. Reconnecting...");
     connectWiFi();
     delay(2000);
     return;
@@ -61,27 +70,35 @@ void loop() {
   float temperature = dht.readTemperature();
 
   if (isnan(humidity) || isnan(temperature)) {
-    Serial.println("[!] Failed to read from DHT11 sensor!");
+    Serial.println("[!] Failed to read from DHT sensor! Check wiring.");
     delay(3000);
     return;
   }
 
-  Serial.printf("Temperature: %.1f °C | Humidity: %.1f %%\n", temperature, humidity);
+  Serial.printf("[Sensor] Temp: %.1f °C | Humidity: %.1f %% | Room: %s\n", temperature, humidity, ROOM);
 
-  // Create JSON
-  StaticJsonDocument<512> doc;
-  doc["device_id"] = "ESP32-ENV-01";
-  doc["hostname"]  = "esp32-dht11-node";
+  // Construct JSON telemetry payload consistent with PC client agent
+  #if ARDUINOJSON_VERSION_MAJOR >= 7
+    JsonDocument doc;
+  #else
+    StaticJsonDocument<512> doc;
+  #endif
+
+  doc["device_id"] = DEVICE_ID;
+  doc["hostname"]  = HOSTNAME;
+  doc["room"]      = ROOM;
+  doc["type"]      = DEV_TYPE;
+  doc["platform"]  = PLATFORM;
 
   JsonObject metrics = doc.createNestedObject("metrics");
   JsonObject dht11 = metrics.createNestedObject("dht11");
-  dht11["temperature_c"] = temperature;
-  dht11["humidity_percent"] = humidity;
+  dht11["temperature_c"] = round(temperature * 10.0) / 10.0;
+  dht11["humidity_percent"] = round(humidity * 10.0) / 10.0;
 
   String jsonPayload;
   serializeJson(doc, jsonPayload);
 
-  // Send data
+  // Transmit payload over HTTP POST
   HTTPClient http;
   http.begin(SERVER_URL);
   http.addHeader("Content-Type", "application/json");
@@ -89,11 +106,11 @@ void loop() {
   int httpCode = http.POST(jsonPayload);
 
   if (httpCode > 0) {
-    Serial.printf("[+] Data sent successfully! HTTP Code: %d\n", httpCode);
+    Serial.printf("[+] Telemetry sent! HTTP %d (Room: %s)\n", httpCode, ROOM);
   } else {
-    Serial.printf("[!] Failed to send data. Error: %d\n", httpCode);
+    Serial.printf("[!] Transmission failed. HTTP error: %s\n", http.errorToString(httpCode).c_str());
   }
 
   http.end();
-  delay(10000);
+  delay(SAMPLING_INTERVAL_MS);
 }

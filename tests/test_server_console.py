@@ -109,6 +109,40 @@ class TestDeviceRegistry(unittest.TestCase):
         devs = device_registry.list_devices(online_within_seconds=120)
         self.assertFalse(devs[0]["is_online"])
 
+    def test_esp32_payload_upsert_and_inference(self):
+        # 1. Standard ESP32 payload with explicit type and platform
+        esp_payload = {
+            "device_id": "ESP32-ENV-01",
+            "hostname": "esp32-dht11-node",
+            "room": "Server-Room",
+            "type": "esp32_telemetry",
+            "platform": "ESP32",
+            "metrics": {
+                "dht11": {"temperature_c": 24.5, "humidity_percent": 55.0}
+            },
+        }
+
+        rec = device_registry.upsert_from_request(esp_payload, client_ip="192.168.1.150")
+        self.assertIsNotNone(rec)
+        self.assertEqual(rec["device_id"], "ESP32-ENV-01")
+        self.assertEqual(rec["hostname"], "esp32-dht11-node")
+        self.assertEqual(rec["room"], "Server-Room")
+        self.assertEqual(rec["type"], "esp32_telemetry")
+        self.assertEqual(rec["platform"], "ESP32")
+        self.assertEqual(rec["client_ip"], "192.168.1.150")
+        self.assertIn("dht11", rec["last_payload_meta"]["sections"])
+
+        # 2. Legacy ESP32 payload without explicit type or platform (inferred from dht11/device_id)
+        legacy_esp = {
+            "device_id": "ESP32-LEGACY",
+            "metrics": {
+                "dht11": {"temperature_c": 21.0, "humidity_percent": 60.0}
+            },
+        }
+        rec_legacy = device_registry.upsert_from_request(legacy_esp, client_ip="192.168.1.151")
+        self.assertEqual(rec_legacy["type"], "esp32_telemetry")
+        self.assertEqual(rec_legacy["platform"], "ESP32")
+
 
 class TestRuntimeConfig(unittest.TestCase):
     def setUp(self):

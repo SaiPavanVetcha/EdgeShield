@@ -33,6 +33,32 @@ class TestServerTransactions(unittest.TestCase):
         # Should have executed 6 INSERT statements
         self.assertEqual(cursor.execute.call_count, 6)
 
+    def test_insert_single_payload_esp32_registers_system_metrics(self):
+        cursor = MagicMock()
+        esp_payload = {
+            "device_id": "ESP32-ENV-01",
+            "hostname": "esp32-node",
+            "room": "Server-Room",
+            "type": "esp32_telemetry",
+            "platform": "ESP32",
+            "metrics": {
+                "dht11": {"temperature_c": 23.5, "humidity_percent": 50.0},
+            },
+        }
+
+        database.insert_single_payload(cursor, esp_payload)
+        # Should execute 2 inserts: system_metrics (to register device/room) and environment_metrics
+        self.assertEqual(cursor.execute.call_count, 2)
+        first_sql = cursor.execute.call_args_list[0][0][0]
+        first_params = cursor.execute.call_args_list[0][0][1]
+        self.assertIn("system_metrics", first_sql)
+        self.assertEqual(first_params[1], "ESP32-ENV-01")  # device_id
+        self.assertEqual(first_params[3], "Server-Room")   # room
+        self.assertEqual(first_params[5], "ESP32")         # platform
+
+        second_sql = cursor.execute.call_args_list[1][0][0]
+        self.assertIn("environment_metrics", second_sql)
+
     def test_insert_single_payload_room_fallback(self):
         cursor = MagicMock()
 
