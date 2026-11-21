@@ -4,7 +4,7 @@ from runtime_config import get_storage_mode
 
 
 def render_landing_html(status_data: Dict[str, Any]) -> str:
-    """Renders the HTML landing page for EdgeShield Central Server."""
+    """Renders the upgraded professional HTML landing page for EdgeShield Central Server."""
     spool_pending = status_data.get("spool", {}).get("pending", 0)
     devices = status_data.get("devices", {})
     devices_online = devices.get("online", 0)
@@ -20,24 +20,30 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
   <title>EdgeShield Central Server</title>
   <style>
     :root {{
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --card-border: #334155;
+      --bg-page: #080c14;
+      --bg-card: #0f172a;
+      --bg-subtle: #162036;
+      --border-subtle: #1e293b;
+      --border-medium: #334155;
+      --border-accent: #38bdf8;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
+      --text-dim: #64748b;
       --accent: #38bdf8;
-      --accent-glow: rgba(56, 189, 248, 0.15);
+      --accent-hover: #0284c7;
       --green: #22c55e;
-      --green-glow: rgba(34, 197, 94, 0.2);
+      --green-glow: rgba(34, 197, 94, 0.15);
       --amber: #f59e0b;
-      --amber-glow: rgba(245, 158, 11, 0.2);
+      --amber-glow: rgba(245, 158, 11, 0.15);
       --purple: #a855f7;
-      --purple-glow: rgba(168, 85, 247, 0.2);
+      --purple-glow: rgba(168, 85, 247, 0.15);
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg);
+      font-family: var(--font-sans);
+      background-color: var(--bg-page);
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
@@ -45,61 +51,75 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
+      background-image: radial-gradient(circle at 50% 10%, rgba(56, 189, 248, 0.05) 0%, transparent 60%);
     }}
     .container {{
-      max-width: 720px;
+      max-width: 760px;
       width: 100%;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
       border-radius: 16px;
-      padding: 2.25rem;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.45);
+      padding: 2.5rem;
+      box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.65);
     }}
     .header {{
       display: flex;
       align-items: center;
-      gap: 1rem;
+      gap: 1.25rem;
       margin-bottom: 0.75rem;
     }}
     .logo-badge {{
-      width: 44px;
-      height: 44px;
-      background: linear-gradient(135deg, #0284c7, #2563eb);
-      border-radius: 12px;
+      width: 52px;
+      height: 52px;
+      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+      border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 800;
-      font-size: 1.25rem;
+      font-size: 1.4rem;
       color: white;
-      box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+      box-shadow: 0 8px 20px -4px rgba(37, 99, 235, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }}
     h1 {{
-      font-size: 1.7rem;
+      font-size: 1.85rem;
       font-weight: 700;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.025em;
+      color: var(--text-main);
     }}
     .subtitle {{
       color: var(--text-muted);
-      font-size: 0.95rem;
-      line-height: 1.5;
-      margin-bottom: 1.75rem;
+      font-size: 1.02rem;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }}
+    .status-section {{
+      margin-bottom: 2rem;
+    }}
+    .section-label {{
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 0.85rem;
     }}
     .pills {{
       display: flex;
       flex-wrap: wrap;
       gap: 0.75rem;
-      margin-bottom: 2rem;
     }}
     .pill {{
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.45rem 0.95rem;
+      gap: 0.55rem;
+      padding: 0.5rem 1rem;
       border-radius: 9999px;
-      font-size: 0.85rem;
+      font-size: 0.875rem;
       font-weight: 600;
       border: 1px solid transparent;
+      background: var(--bg-subtle);
     }}
     .pill-green {{
       background: var(--green-glow);
@@ -112,40 +132,78 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       border-color: rgba(245, 158, 11, 0.3);
     }}
     .pill-accent {{
-      background: var(--accent-glow);
+      background: rgba(56, 189, 248, 0.12);
       color: var(--accent);
-      border-color: rgba(56, 189, 248, 0.3);
+      border-color: rgba(56, 189, 248, 0.25);
     }}
     .pill-purple {{
       background: var(--purple-glow);
-      color: var(--purple);
+      color: #c084fc;
       border-color: rgba(168, 85, 247, 0.3);
     }}
-    .dot {{
+    .dot-pulse {{
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background-color: currentColor;
-      box-shadow: 0 0 8px currentColor;
+      background-color: var(--green);
+      box-shadow: 0 0 10px var(--green);
+      animation: pulse 2s infinite ease-in-out;
     }}
-    .section-title {{
-      font-size: 0.8rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+    @keyframes pulse {{
+      0%, 100% {{ opacity: 1; transform: scale(1); }}
+      50% {{ opacity: 0.4; transform: scale(0.85); }}
+    }}
+    /* Hero CTA Button */
+    .hero-cta-box {{
+      margin-bottom: 2rem;
+      padding: 1.25rem;
+      background: linear-gradient(135deg, rgba(2, 132, 199, 0.12) 0%, rgba(37, 99, 235, 0.05) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }}
+    .cta-text {{
+      font-size: 0.95rem;
+      color: var(--text-main);
+      font-weight: 500;
+    }}
+    .cta-sub {{
+      font-size: 0.82rem;
       color: var(--text-muted);
-      margin-bottom: 0.85rem;
+      margin-top: 0.2rem;
+    }}
+    .btn-cta {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+      color: white;
+      padding: 0.75rem 1.4rem;
+      border-radius: 9px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+    }}
+    .btn-cta:hover {{
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.55);
     }}
     .links-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 0.85rem;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 0.9rem;
     }}
     .link-card {{
-      background: rgba(15, 23, 42, 0.5);
-      border: 1px solid var(--card-border);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
       border-radius: 10px;
-      padding: 0.95rem;
+      padding: 1rem;
       text-decoration: none;
       color: var(--text-main);
       transition: all 0.2s ease;
@@ -155,27 +213,34 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
     }}
     .link-card:hover {{
       border-color: var(--accent);
-      background: rgba(56, 189, 248, 0.06);
+      background: rgba(56, 189, 248, 0.05);
       transform: translateY(-2px);
     }}
     .link-title {{
       font-weight: 600;
-      font-size: 0.9rem;
+      font-size: 0.92rem;
       color: var(--accent);
     }}
     .link-desc {{
-      font-size: 0.78rem;
+      font-size: 0.8rem;
       color: var(--text-muted);
     }}
     .footer {{
-      margin-top: 1.75rem;
+      margin-top: 2rem;
       padding-top: 1.25rem;
-      border-top: 1px solid var(--card-border);
+      border-top: 1px solid var(--border-subtle);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.8rem;
-      color: var(--text-muted);
+      font-size: 0.82rem;
+      color: var(--text-dim);
+    }}
+    code {{
+      font-family: var(--font-mono);
+      background: rgba(0, 0, 0, 0.3);
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      color: var(--accent);
     }}
   </style>
 </head>
@@ -183,45 +248,63 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
   <div class="container">
     <div class="header">
       <div class="logo-badge">ES</div>
-      <h1>EdgeShield Central Server</h1>
+      <div>
+        <h1>EdgeShield Central Server</h1>
+      </div>
     </div>
     <p class="subtitle">
       Real-time edge telemetry ingestion & operational monitoring console.
     </p>
 
-    <div class="section-title">Operational Status</div>
-    <div class="pills">
-      <div class="pill pill-green" title="Ingestion service is active and accepting metrics">
-        <span class="dot"></span> Server: Online
-      </div>
-      <div class="pill pill-amber" title="Records waiting in durable spool">
-        <span class="dot"></span> Spool: <span id="pill-spool">{spool_pending}</span> pending
-      </div>
-      <div class="pill pill-accent" title="Active edge devices within last 120s vs total">
-        <span class="dot"></span> Devices: <span id="pill-devices">{devices_online} online / {devices_total} total</span>
-      </div>
-      <div class="pill pill-purple" title="Active storage mode (local spool vs Databricks cloud)">
-        Mode: <span id="pill-mode" style="text-transform: uppercase;">{storage_mode}</span>
+    <!-- Operational Status Pills -->
+    <div class="status-section">
+      <div class="section-label">Operational Status</div>
+      <div class="pills">
+        <div class="pill pill-green" title="Ingestion service is active and accepting metrics">
+          <span class="dot-pulse"></span> Server: Online
+        </div>
+        <div class="pill pill-amber" title="Records waiting in durable SQLite spool">
+          Spool: <span id="pill-spool" style="font-weight: 700; margin-left: 3px;">{spool_pending}</span>&nbsp;pending
+        </div>
+        <div class="pill pill-accent" title="Active edge devices within last 120s vs total known">
+          Devices: <span id="pill-devices" style="font-weight: 700; margin-left: 3px;">{devices_online} online / {devices_total} total</span>
+        </div>
+        <div class="pill pill-purple" title="Active persistence mode (local spool vs Databricks lakehouse)">
+          Storage: <span id="pill-mode" style="font-weight: 700; text-transform: uppercase; margin-left: 3px;">{storage_mode}</span>
+        </div>
       </div>
     </div>
 
-    <div class="section-title">Console & APIs</div>
+    <!-- Hero CTA -->
+    <div class="hero-cta-box">
+      <div>
+        <div class="cta-text">EdgeShield Server Console</div>
+        <div class="cta-sub">Inspect edge fleet, manage spool flush, toggle storage mode & view live logs</div>
+      </div>
+      <a class="btn-cta" href="/console">
+        <span>Open Ops Console</span>
+        <span>&rarr;</span>
+      </a>
+    </div>
+
+    <!-- Secondary Links Grid -->
+    <div class="section-label">API & Service Endpoints</div>
     <div class="links-grid">
       <a class="link-card" href="/console">
-        <span class="link-title">Ops Console &rarr;</span>
-        <span class="link-desc">Tabs: Overview, Devices, Spool & Live Logs</span>
+        <span class="link-title">/console</span>
+        <span class="link-desc">Interactive tabbed control plane</span>
       </a>
       <a class="link-card" href="/api/console/status" target="_blank">
         <span class="link-title">GET /api/console/status</span>
-        <span class="link-desc">Storage mode, spool status & health JSON</span>
+        <span class="link-desc">Live status, storage mode & spool health</span>
       </a>
       <a class="link-card" href="/api/console/devices" target="_blank">
         <span class="link-title">GET /api/console/devices</span>
-        <span class="link-desc">Active device registry & telemetry metadata</span>
+        <span class="link-desc">Known device registry & metadata</span>
       </a>
       <a class="link-card" href="/health" target="_blank">
         <span class="link-title">GET /health</span>
-        <span class="link-desc">Standard service health & spool metrics</span>
+        <span class="link-desc">Standard service health JSON</span>
       </a>
     </div>
 
@@ -251,7 +334,7 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
         }}
       }} catch (err) {{}}
     }}
-    setInterval(refreshStatus, 4000);
+    setInterval(refreshStatus, 3500);
   </script>
 </body>
 </html>"""
@@ -267,123 +350,243 @@ def render_console_html() -> str:
   <title>EdgeShield Server Console</title>
   <style>
     :root {{
-      --bg: #0b1120;
-      --card-bg: #1e293b;
-      --card-border: #334155;
+      --bg-page: #080c14;
+      --bg-surface: #0f172a;
+      --bg-card: #141e33;
+      --bg-subtle: #19243c;
+      --bg-input: #090e1a;
+      --border-subtle: #1e293b;
+      --border-medium: #2e3e5c;
+      --border-focus: #38bdf8;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
+      --text-dim: #64748b;
       --accent: #38bdf8;
       --accent-hover: #0284c7;
       --green: #22c55e;
+      --green-glow: rgba(34, 197, 94, 0.18);
       --amber: #f59e0b;
+      --amber-glow: rgba(245, 158, 11, 0.18);
       --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.18);
       --purple: #c084fc;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: var(--bg);
+      font-family: var(--font-sans);
+      background-color: var(--bg-page);
       color: var(--text-main);
       padding: 1.5rem;
+      min-height: 100vh;
     }}
-    .navbar {{
+    /* Top Bar */
+    .topbar {{
       display: flex;
       align-items: center;
       justify-content: space-between;
-      max-width: 1200px;
+      max-width: 1240px;
       margin: 0 auto 1.5rem auto;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid var(--card-border);
+      padding: 0.85rem 1.25rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     }}
-    .navbar a {{
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 0.9rem;
-      font-weight: 500;
-    }}
-    .navbar a:hover {{ text-decoration: underline; }}
-    .logo-group {{
+    .brand-group {{
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.85rem;
     }}
-    .badge {{
-      background: #0284c7;
+    .brand-badge {{
+      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
       color: white;
-      font-weight: 700;
-      padding: 0.3rem 0.6rem;
+      font-weight: 800;
+      padding: 0.4rem 0.75rem;
       border-radius: 8px;
-      font-size: 0.85rem;
+      font-size: 0.95rem;
+      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
     }}
+    .brand-title {{
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: -0.01em;
+      color: var(--text-main);
+    }}
+    .topbar-right {{
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }}
+    .chip {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }}
+    .chip-online {{
+      background: var(--green-glow);
+      color: var(--green);
+      border-color: rgba(34, 197, 94, 0.3);
+    }}
+    .chip-mode {{
+      background: rgba(168, 85, 247, 0.15);
+      color: #c084fc;
+      border-color: rgba(168, 85, 247, 0.3);
+    }}
+    .chip-host {{
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border-color: var(--border-subtle);
+      font-family: var(--font-mono);
+      text-transform: none;
+    }}
+    .dot-live {{
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: live-pulse 2s infinite ease-in-out;
+    }}
+    @keyframes live-pulse {{
+      0%, 100% {{ opacity: 1; transform: scale(1); }}
+      50% {{ opacity: 0.4; transform: scale(0.85); }}
+    }}
+    .btn-nav {{
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }}
+    .btn-nav:hover {{
+      background: rgba(56, 189, 248, 0.1);
+      text-decoration: underline;
+    }}
+    /* Main Layout */
     .container {{
-      max-width: 1200px;
+      max-width: 1240px;
       margin: 0 auto;
     }}
+    /* Toast System */
+    #action-toast {{
+      display: none;
+      padding: 0.85rem 1.25rem;
+      border-radius: 8px;
+      margin-bottom: 1.25rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      animation: toast-in 0.25s ease-out;
+    }}
+    @keyframes toast-in {{
+      from {{ opacity: 0; transform: translateY(-6px); }}
+      to {{ opacity: 1; transform: translateY(0); }}
+    }}
+    .toast-success {{
+      background: rgba(34, 197, 94, 0.12);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+    }}
+    .toast-error {{
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }}
+    /* Tab Navigation */
     .tabs {{
       display: flex;
       gap: 0.5rem;
       margin-bottom: 1.5rem;
-      border-bottom: 1px solid var(--card-border);
+      border-bottom: 1px solid var(--border-subtle);
       padding-bottom: 0.5rem;
     }}
     .tab-btn {{
       background: transparent;
       border: 1px solid transparent;
       color: var(--text-muted);
-      padding: 0.6rem 1.25rem;
+      padding: 0.65rem 1.4rem;
       border-radius: 8px;
       font-size: 0.95rem;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.18s ease;
+      outline: none;
     }}
     .tab-btn:hover {{
       color: var(--text-main);
-      background: rgba(255,255,255,0.05);
+      background: rgba(255, 255, 255, 0.05);
+    }}
+    .tab-btn:focus-visible {{
+      border-color: var(--border-focus);
     }}
     .tab-btn.active {{
-      background: var(--card-bg);
-      border-color: var(--card-border);
+      background: var(--bg-card);
+      border-color: var(--border-medium);
       color: var(--accent);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }}
     .tab-content {{
       display: none;
     }}
     .tab-content.active {{
       display: block;
+      animation: tab-fade 0.2s ease-out;
     }}
+    @keyframes tab-fade {{
+      from {{ opacity: 0; transform: translateY(4px); }}
+      to {{ opacity: 1; transform: translateY(0); }}
+    }}
+    /* Card Grid */
     .grid-cards {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1rem;
+      gap: 1.15rem;
       margin-bottom: 1.5rem;
     }}
     .card {{
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
       border-radius: 12px;
-      padding: 1.25rem;
+      padding: 1.35rem;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     }}
     .card-label {{
-      font-size: 0.8rem;
-      color: var(--text-muted);
+      font-size: 0.78rem;
+      color: var(--text-dim);
       text-transform: uppercase;
-      font-weight: 600;
-      letter-spacing: 0.05em;
+      font-weight: 700;
+      letter-spacing: 0.06em;
     }}
     .card-val {{
-      font-size: 1.7rem;
+      font-size: 1.85rem;
       font-weight: 700;
-      margin-top: 0.35rem;
+      margin-top: 0.4rem;
+      letter-spacing: -0.02em;
       color: var(--accent);
     }}
+    .card-desc {{
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-top: 0.4rem;
+    }}
+    /* Panels */
     .panel {{
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
       border-radius: 12px;
-      padding: 1.5rem;
+      padding: 1.6rem;
       margin-bottom: 1.5rem;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     }}
     .panel-header {{
       display: flex;
@@ -393,57 +596,93 @@ def render_console_html() -> str:
     }}
     .panel-title {{
       font-size: 1.15rem;
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text-main);
     }}
-    /* Mode toggle button group */
+    /* Storage Mode Segmented Controller */
+    .mode-control-box {{
+      margin-top: 1rem;
+      padding: 1.25rem;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+    }}
     .mode-toggle-group {{
       display: inline-flex;
-      background: rgba(15, 23, 42, 0.7);
-      border: 1px solid var(--card-border);
+      background: var(--bg-input);
+      border: 1px solid var(--border-medium);
       border-radius: 10px;
       padding: 4px;
       gap: 4px;
-      margin-top: 0.75rem;
     }}
     .mode-btn {{
       background: transparent;
       border: none;
       color: var(--text-muted);
-      padding: 0.5rem 1rem;
-      font-size: 0.88rem;
+      padding: 0.6rem 1.3rem;
+      font-size: 0.9rem;
       font-weight: 600;
-      border-radius: 6px;
+      border-radius: 7px;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.18s ease;
+    }}
+    .mode-btn:hover {{
+      color: var(--text-main);
     }}
     .mode-btn.active {{
-      background: #0284c7;
+      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
       color: white;
-      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+      box-shadow: 0 2px 10px rgba(2, 132, 199, 0.45);
+    }}
+    .mode-help-text {{
+      margin-top: 0.85rem;
+      font-size: 0.86rem;
+      color: var(--text-muted);
+      line-height: 1.5;
     }}
     /* Buttons */
     .btn {{
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      background: #0284c7;
+      gap: 0.55rem;
+      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
       color: white;
       border: none;
-      padding: 0.6rem 1.2rem;
+      padding: 0.65rem 1.35rem;
       border-radius: 8px;
-      font-size: 0.9rem;
+      font-size: 0.92rem;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
     }}
-    .btn:hover {{ background: #0369a1; }}
-    .btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+    .btn:hover:not(:disabled) {{
+      box-shadow: 0 6px 16px rgba(2, 132, 199, 0.5);
+      transform: translateY(-1px);
+    }}
+    .btn:disabled {{
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }}
     .btn-secondary {{
-      background: rgba(255,255,255,0.1);
+      background: rgba(255, 255, 255, 0.08);
       color: var(--text-main);
+      box-shadow: none;
+      border: 1px solid var(--border-medium);
     }}
-    .btn-secondary:hover {{ background: rgba(255,255,255,0.15); }}
+    .btn-secondary:hover:not(:disabled) {{
+      background: rgba(255, 255, 255, 0.13);
+      box-shadow: none;
+      transform: none;
+    }}
     /* Tables */
+    .table-container {{
+      overflow-x: auto;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+    }}
     table {{
       width: 100%;
       border-collapse: collapse;
@@ -451,88 +690,112 @@ def render_console_html() -> str:
       font-size: 0.88rem;
     }}
     th {{
-      padding: 0.75rem 1rem;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--card-border);
-      font-weight: 600;
-      font-size: 0.78rem;
+      padding: 0.8rem 1rem;
+      background: var(--bg-subtle);
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border-medium);
+      font-weight: 700;
+      font-size: 0.75rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.06em;
     }}
     td {{
-      padding: 0.85rem 1rem;
-      border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.35);
     }}
     tr:last-child td {{ border-bottom: none; }}
-    .status-pill {{
-      display: inline-block;
-      padding: 0.2rem 0.55rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
+    tr:hover td {{
+      background: rgba(255, 255, 255, 0.02);
     }}
-    .status-online {{
-      background: rgba(34, 197, 94, 0.2);
+    .status-badge {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }}
+    .status-badge-online {{
+      background: var(--green-glow);
       color: var(--green);
       border: 1px solid rgba(34, 197, 94, 0.4);
     }}
-    .status-offline {{
-      background: rgba(148, 163, 184, 0.15);
+    .status-badge-offline {{
+      background: rgba(148, 163, 184, 0.12);
       color: var(--text-muted);
-      border: 1px solid rgba(148, 163, 184, 0.3);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }}
+    .badge-room {{
+      background: rgba(56, 189, 248, 0.14);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 0.2rem 0.55rem;
+      border-radius: 5px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }}
+    .badge-unassigned {{
+      background: rgba(100, 116, 139, 0.15);
+      color: var(--text-dim);
+      border: 1px dashed rgba(100, 116, 139, 0.35);
+      padding: 0.2rem 0.55rem;
+      border-radius: 5px;
+      font-size: 0.8rem;
+      font-style: italic;
     }}
     /* Log viewer */
     .log-terminal {{
-      background: #030712;
-      border: 1px solid var(--card-border);
+      background: #030611;
+      border: 1px solid var(--border-medium);
       border-radius: 8px;
-      padding: 1rem;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      padding: 1.15rem;
+      font-family: var(--font-mono);
       font-size: 0.82rem;
-      line-height: 1.6;
-      max-height: 480px;
+      line-height: 1.65;
+      max-height: 520px;
       overflow-y: auto;
-      color: #e2e8f0;
+      color: #cbd5e1;
       white-space: pre-wrap;
       word-break: break-all;
     }}
     .log-line {{
       padding: 2px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.02);
     }}
-    .lvl-INFO {{ color: #38bdf8; font-weight: 600; }}
-    .lvl-WARNING {{ color: #fbbf24; font-weight: 600; }}
-    .lvl-ERROR {{ color: #f87171; font-weight: 600; }}
-    /* Notifications toast */
-    #action-toast {{
-      display: none;
-      padding: 0.75rem 1.25rem;
-      border-radius: 8px;
-      margin-bottom: 1rem;
-      font-size: 0.9rem;
-      font-weight: 500;
+    .lvl-INFO {{ color: #38bdf8; font-weight: 700; }}
+    .lvl-WARNING {{ color: #fbbf24; font-weight: 700; }}
+    .lvl-ERROR {{ color: #f87171; font-weight: 700; }}
+    .empty-state {{
+      text-align: center;
+      padding: 3rem 1.5rem;
+      color: var(--text-muted);
     }}
-    .toast-success {{
-      background: rgba(34, 197, 94, 0.15);
-      color: var(--green);
-      border: 1px solid rgba(34, 197, 94, 0.3);
+    .empty-state-title {{
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 0.4rem;
     }}
-    .toast-error {{
-      background: rgba(239, 68, 68, 0.15);
-      color: var(--red);
-      border: 1px solid rgba(239, 68, 68, 0.3);
+    .empty-state-sub {{
+      font-size: 0.85rem;
+      color: var(--text-dim);
     }}
   </style>
 </head>
 <body>
-  <div class="navbar">
-    <div class="logo-group">
-      <span class="badge">ES CONSOLE</span>
-      <span style="font-weight: 700; font-size: 1.1rem;">EdgeShield Ingestion Ops</span>
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="brand-group">
+      <span class="brand-badge">ES</span>
+      <span class="brand-title">EdgeShield Server Console</span>
+      <span class="chip chip-online"><span class="dot-live"></span> Online</span>
     </div>
-    <div style="display: flex; gap: 1rem; align-items: center;">
-      <span id="nav-mode-badge" style="background: rgba(168,85,247,0.2); color: #c084fc; border: 1px solid rgba(168,85,247,0.4); padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">MODE: LOCAL</span>
-      <a href="/">&larr; Landing Page</a>
+    <div class="topbar-right">
+      <span id="nav-mode-badge" class="chip chip-mode">MODE: LOCAL</span>
+      <span class="chip chip-host"><code>{HOST}:{PORT}</code></span>
+      <a class="btn-nav" href="/">&larr; Home</a>
     </div>
   </div>
 
@@ -540,71 +803,87 @@ def render_console_html() -> str:
     <div id="action-toast"></div>
 
     <!-- Tab navigation -->
-    <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
-      <button class="tab-btn" onclick="switchTab('devices')">Devices</button>
-      <button class="tab-btn" onclick="switchTab('spool')">Spool</button>
-      <button class="tab-btn" onclick="switchTab('logs')">Logs</button>
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" role="tab" aria-selected="true" onclick="switchTab('overview')">Overview</button>
+      <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('devices')">Devices</button>
+      <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('spool')">Spool</button>
+      <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('logs')">Logs</button>
     </div>
 
     <!-- TAB 1: OVERVIEW -->
-    <div id="tab-overview" class="tab-content active">
+    <div id="tab-overview" class="tab-content active" role="tabpanel">
       <div class="grid-cards">
         <div class="card">
-          <div class="card-label">Server State</div>
+          <div class="card-label">Server Ingestion State</div>
           <div class="card-val" style="color: var(--green);" id="ov-status">Online</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;" id="ov-bind">Bind: {HOST}:{PORT}</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Active Edge Devices</div>
-          <div class="card-val" id="ov-devices">...</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;">Seen within 120s</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Spool Queue</div>
-          <div class="card-val" style="color: var(--amber);" id="ov-spool">...</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;" id="ov-spool-sub">Records on local disk</div>
+          <div class="card-desc" id="ov-bind">Listening on {HOST}:{PORT}</div>
         </div>
         <div class="card">
           <div class="card-label">Process Uptime</div>
           <div class="card-val" id="ov-uptime">...</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;" id="ov-last-refreshed">Active</div>
+          <div class="card-desc" id="ov-last-refreshed">Live process timer</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Storage Mode</div>
+          <div class="card-val" style="color: var(--purple);" id="ov-storage-mode">...</div>
+          <div class="card-desc" id="ov-mode-desc">Resolving persistence target</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Spool Queue Pending</div>
+          <div class="card-val" style="color: var(--amber);" id="ov-spool">...</div>
+          <div class="card-desc" id="ov-spool-sub">Durable records awaiting flush</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Active Edge Devices</div>
+          <div class="card-val" id="ov-devices">...</div>
+          <div class="card-desc">Online within last 120s</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Databricks Lakehouse</div>
+          <div class="card-val" id="ov-db-configured" style="font-size: 1.35rem; margin-top: 0.65rem;">...</div>
+          <div class="card-desc" id="ov-db-sub">Cloud warehouse connection</div>
         </div>
       </div>
 
       <!-- Storage Mode Controller -->
       <div class="panel">
         <div class="panel-title">Storage Mode Controller</div>
-        <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.35rem; margin-bottom: 0.85rem;">
-          Select how ingested telemetry is persisted. In <b>local</b> mode, records are durably retained in the local SQLite spool without attempting cloud sync. In <b>databricks</b> mode, the background worker transactionally commits spool batches to the lakehouse.
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.35rem;">
+          Control telemetry persistence behavior dynamically without restarting the server.
         </p>
-        <div class="mode-toggle-group">
-          <button id="btn-mode-local" class="mode-btn" onclick="changeStorageMode('local')">Local (Spool Only)</button>
-          <button id="btn-mode-databricks" class="mode-btn" onclick="changeStorageMode('databricks')">Databricks (Cloud Flush)</button>
-        </div>
-        <div style="margin-top: 0.85rem; font-size: 0.85rem;">
-          <span>Databricks Configuration: </span>
-          <span id="ov-db-configured" style="font-weight: 600;">Checking...</span>
+
+        <div class="mode-control-box">
+          <div class="mode-toggle-group">
+            <button id="btn-mode-local" class="mode-btn" onclick="changeStorageMode('local')">Local (Spool Only)</button>
+            <button id="btn-mode-databricks" class="mode-btn" onclick="changeStorageMode('databricks')">Databricks (Cloud Flush)</button>
+          </div>
+          <div class="mode-help-text" id="mode-help-text">
+            <b>Local:</b> Telemetry records are safely appended to local SQLite spool without attempting cloud sync. Zero cloud failures.<br>
+            <b>Databricks:</b> Background worker transactionally flushes batches into Databricks SQL Warehouse. Spool records are deleted only on verified commit.
+          </div>
         </div>
       </div>
 
       <!-- Last Flush Summary Card -->
       <div class="panel">
         <div class="panel-title">Last Spool Flush Summary</div>
-        <div id="ov-flush-details" style="font-size: 0.88rem; line-height: 1.8; margin-top: 0.75rem; color: var(--text-muted);">
+        <div id="ov-flush-details" style="font-size: 0.9rem; line-height: 1.8; margin-top: 0.85rem; color: var(--text-muted);">
           Loading flush metadata...
         </div>
       </div>
     </div>
 
     <!-- TAB 2: DEVICES -->
-    <div id="tab-devices" class="tab-content">
+    <div id="tab-devices" class="tab-content" role="tabpanel">
       <div class="panel">
         <div class="panel-header">
-          <div class="panel-title">Registered Edge Devices</div>
-          <span style="font-size: 0.8rem; color: var(--text-muted);" id="devices-count-label">0 devices</span>
+          <div>
+            <div class="panel-title">Registered Edge Fleet</div>
+            <div style="font-size: 0.84rem; color: var(--text-dim); margin-top: 0.2rem;">Edge machines sending telemetry via /metrics</div>
+          </div>
+          <span class="chip chip-host" id="devices-count-label">0 devices</span>
         </div>
-        <div style="overflow-x: auto;">
+        <div class="table-container">
           <table>
             <thead>
               <tr>
@@ -613,13 +892,13 @@ def render_console_html() -> str:
                 <th>Hostname</th>
                 <th>Room</th>
                 <th>Type</th>
-                <th>Platform</th>
+                <th>Platform / OS</th>
                 <th>Client IP</th>
                 <th>Last Seen (UTC)</th>
               </tr>
             </thead>
             <tbody id="devices-tbody">
-              <tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading registry...</td></tr>
+              <tr><td colspan="8" class="empty-state">Loading registry...</td></tr>
             </tbody>
           </table>
         </div>
@@ -627,22 +906,22 @@ def render_console_html() -> str:
     </div>
 
     <!-- TAB 3: SPOOL -->
-    <div id="tab-spool" class="tab-content">
+    <div id="tab-spool" class="tab-content" role="tabpanel">
       <div class="grid-cards">
         <div class="card">
-          <div class="card-label">Pending Records</div>
+          <div class="card-label">Pending Spool Records</div>
           <div class="card-val" style="color: var(--amber);" id="spool-pending-val">...</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;" id="spool-cap-info">Max capacity: ...</div>
+          <div class="card-desc" id="spool-cap-info">Max capacity: ...</div>
         </div>
         <div class="card">
           <div class="card-label">Flush Interval</div>
           <div class="card-val" id="spool-interval-val">...</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;">Seconds between cycles</div>
+          <div class="card-desc">Seconds between automated background cycles</div>
         </div>
         <div class="card">
           <div class="card-label">Batch Size Limit</div>
           <div class="card-val" id="spool-batch-val">...</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;">Max records per transaction</div>
+          <div class="card-desc">Maximum payload records per transaction</div>
         </div>
       </div>
 
@@ -650,33 +929,36 @@ def render_console_html() -> str:
         <div class="panel-header">
           <div>
             <div class="panel-title">Manual Spool Flush Trigger</div>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">
-              Trigger an immediate flush cycle. If storage mode is Databricks, flushes pending batch atomically; if local, performs a validated no-op.
+            <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">
+              Manually trigger one flush cycle for the current storage mode. In Databricks mode, drains one batch to the cloud; in Local mode, runs a validated no-op.
             </p>
           </div>
           <button id="btn-flush-now" class="btn" onclick="triggerManualFlush()">
             <span>&uarr;</span> Flush Spool Now
           </button>
         </div>
-        <div id="spool-flush-msg" style="margin-top: 0.75rem; font-size: 0.88rem; color: var(--text-muted);"></div>
+        <div id="spool-flush-msg" style="margin-top: 0.85rem; font-size: 0.9rem;"></div>
       </div>
 
       <div class="panel">
         <div class="panel-title">Last Flush Transaction Detail</div>
-        <div id="spool-last-flush" style="font-size: 0.88rem; line-height: 1.8; margin-top: 0.75rem; color: var(--text-muted);">
+        <div id="spool-last-flush" style="font-size: 0.9rem; line-height: 1.8; margin-top: 0.85rem; color: var(--text-muted);">
           Loading...
         </div>
       </div>
     </div>
 
     <!-- TAB 4: LOGS -->
-    <div id="tab-logs" class="tab-content">
+    <div id="tab-logs" class="tab-content" role="tabpanel">
       <div class="panel">
         <div class="panel-header">
-          <div class="panel-title">Server Operational Logs (Ring Buffer)</div>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button class="btn btn-secondary" onclick="loadLogs(true)" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Refresh</button>
-            <label style="font-size: 0.8rem; color: var(--text-muted); cursor: pointer;">
+          <div>
+            <div class="panel-title">Server Operational Logs (Ring Buffer)</div>
+            <div style="font-size: 0.84rem; color: var(--text-dim); margin-top: 0.2rem;">Live in-memory stream of recent operational server events</div>
+          </div>
+          <div style="display: flex; gap: 0.65rem; align-items: center;">
+            <button class="btn btn-secondary" onclick="loadLogs(true)" style="padding: 0.45rem 0.9rem; font-size: 0.82rem;">Refresh</button>
+            <label style="font-size: 0.82rem; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; gap: 0.35rem;">
               <input type="checkbox" id="chk-auto-logs" checked> Auto-refresh
             </label>
           </div>
@@ -694,16 +976,18 @@ def render_console_html() -> str:
 
     function switchTab(tab) {{
       currentTab = tab;
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => {{
+        const isActive = b.textContent.toLowerCase() === tab;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      }});
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-      const targetBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.textContent.toLowerCase() === tab);
-      if (targetBtn) targetBtn.classList.add('active');
 
       const targetContent = document.getElementById('tab-' + tab);
       if (targetContent) targetContent.classList.add('active');
 
       if (tab === 'logs') loadLogs();
+      if (tab === 'devices') loadDevices();
     }}
 
     function showToast(message, isError) {{
@@ -711,13 +995,41 @@ def render_console_html() -> str:
       toast.textContent = message;
       toast.className = isError ? 'toast-error' : 'toast-success';
       toast.style.display = 'block';
-      setTimeout(() => {{ toast.style.display = 'none'; }}, 5000);
+      setTimeout(() => {{ toast.style.display = 'none'; }}, 4500);
+    }}
+
+    function formatRelativeTime(isoStr) {{
+      if (!isoStr) return '-';
+      try {{
+        const then = new Date(isoStr);
+        const now = new Date();
+        const diffSec = Math.floor((now - then) / 1000);
+        if (diffSec < 5) return 'Just now';
+        if (diffSec < 60) return `${{diffSec}}s ago`;
+        const diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) return `${{diffMin}}m ago`;
+        const diffHr = Math.floor(diffMin / 60);
+        return `${{diffHr}}h ago`;
+      }} catch (e) {{
+        return isoStr.replace('T', ' ').substring(0, 19);
+      }}
+    }}
+
+    function formatUptime(seconds) {{
+      if (!seconds && seconds !== 0) return '0s';
+      const sec = Math.floor(seconds);
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (h > 0) return `${{h}}h ${{m}}m ${{s}}s`;
+      if (m > 0) return `${{m}}m ${{s}}s`;
+      return `${{s}}s`;
     }}
 
     async function changeStorageMode(newMode) {{
       try {{
-        const btn = document.getElementById('btn-mode-' + newMode);
-        if (btn) btn.disabled = true;
+        document.getElementById('btn-mode-local').disabled = true;
+        document.getElementById('btn-mode-databricks').disabled = true;
 
         const res = await fetch('/api/console/storage-mode', {{
           method: 'POST',
@@ -726,7 +1038,7 @@ def render_console_html() -> str:
         }});
         if (!res.ok) {{
           const err = await res.json();
-          throw new Error(err.detail || 'Failed to change mode');
+          throw new Error(err.detail || 'Failed to switch storage mode');
         }}
         const data = await res.json();
         showToast(`Storage mode switched to ${{newMode.toUpperCase()}} successfully.`, false);
@@ -742,16 +1054,19 @@ def render_console_html() -> str:
     async function triggerManualFlush() {{
       const btn = document.getElementById('btn-flush-now');
       btn.disabled = true;
-      btn.textContent = 'Flushing...';
+      btn.textContent = 'Flushing batch...';
 
       try {{
         const res = await fetch('/api/console/flush', {{ method: 'POST' }});
         const data = await res.json();
         if (res.ok) {{
-          showToast(data.message || 'Flush cycle completed.', data.status !== 'success');
-          document.getElementById('spool-flush-msg').textContent = `Outcome: ${{data.message}} (Inserted: ${{data.inserted}}, Failed: ${{data.failed}}, Pending: ${{data.pending}})`;
+          const isErr = data.status !== 'success';
+          showToast(data.message || 'Flush completed.', isErr);
+          const msgDiv = document.getElementById('spool-flush-msg');
+          msgDiv.style.color = isErr ? 'var(--red)' : 'var(--green)';
+          msgDiv.textContent = `Outcome: ${{data.message}} (Inserted: ${{data.inserted}}, Failed: ${{data.failed}}, Pending: ${{data.pending}})`;
         }} else {{
-          throw new Error(data.detail || 'Flush failed');
+          throw new Error(data.detail || 'Flush request failed');
         }}
         await refreshStatus();
       }} catch (err) {{
@@ -773,28 +1088,38 @@ def render_console_html() -> str:
         document.getElementById('nav-mode-badge').textContent = 'MODE: ' + currentStorageMode.toUpperCase();
         document.getElementById('btn-mode-local').className = 'mode-btn' + (currentStorageMode === 'local' ? ' active' : '');
         document.getElementById('btn-mode-databricks').className = 'mode-btn' + (currentStorageMode === 'databricks' ? ' active' : '');
+        document.getElementById('ov-storage-mode').textContent = currentStorageMode.toUpperCase();
+        document.getElementById('ov-mode-desc').textContent = currentStorageMode === 'local' ? 'Retained in SQLite spool' : 'Batch sync to lakehouse';
 
         // Databricks configured
         const dbConf = document.getElementById('ov-db-configured');
+        const dbSub = document.getElementById('ov-db-sub');
         if (st.databricks_configured) {{
-          dbConf.textContent = 'Configured (Host, Path, Token available)';
+          dbConf.textContent = 'Configured';
           dbConf.style.color = 'var(--green)';
+          dbSub.textContent = 'Warehouse credentials active';
         }} else {{
-          dbConf.textContent = 'Not Configured (Missing env credentials)';
+          dbConf.textContent = 'Missing Config';
           dbConf.style.color = 'var(--amber)';
+          dbSub.textContent = 'DATABRICKS_* env vars empty';
         }}
 
         // Overview stats
         document.getElementById('ov-devices').textContent = `${{st.devices?.online ?? 0}} / ${{st.devices?.total ?? 0}}`;
         document.getElementById('ov-spool').textContent = st.spool?.pending ?? 0;
-        document.getElementById('ov-uptime').textContent = (st.uptime_seconds ?? 0) + 's';
+        document.getElementById('ov-uptime').textContent = formatUptime(st.uptime_seconds);
 
         // Last flush info
         const lf = st.last_flush || {{}};
+        const lfSuccess = lf.success;
+        const lfStatusHtml = lfSuccess
+          ? '<span style="color: var(--green); font-weight: 700;">OK / SUCCESS</span>'
+          : '<span style="color: var(--amber); font-weight: 700;">RETRY / FAILED</span>';
+
         const lfHtml = `
-          <div><b>Status:</b> <span style="color: ${{lf.success ? 'var(--green)' : 'var(--amber)'}}">${{lf.success ? 'SUCCESS / OK' : 'FAILED / RETRY'}}</span></div>
-          <div><b>Timestamp:</b> ${{lf.timestamp ? lf.timestamp.replace('T', ' ').substring(0, 19) + ' UTC' : 'None yet'}}</div>
-          <div><b>Last Batch:</b> ${{lf.inserted ?? 0}} inserted, ${{lf.failed ?? 0}} failed</div>
+          <div><b>Status:</b> ${{lfStatusHtml}}</div>
+          <div><b>Timestamp:</b> ${{lf.timestamp ? lf.timestamp.replace('T', ' ').substring(0, 19) + ' UTC (' + formatRelativeTime(lf.timestamp) + ')' : 'No flush cycle yet'}}</div>
+          <div><b>Batch Metrics:</b> ${{lf.inserted ?? 0}} inserted, ${{lf.failed ?? 0}} failed</div>
           ${{lf.message ? '<div><b>Message:</b> ' + lf.message + '</div>' : ''}}
           ${{lf.error ? '<div style="color: var(--red);"><b>Error:</b> ' + lf.error + '</div>' : ''}}
         `;
@@ -819,24 +1144,35 @@ def render_console_html() -> str:
         document.getElementById('devices-count-label').textContent = `${{data.online}} online / ${{data.total}} total`;
 
         if (!data.devices || data.devices.length === 0) {{
-          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">No devices registered yet. Start an EdgeShield client or post telemetry to <code>/metrics</code>.</td></tr>';
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8">
+                <div class="empty-state">
+                  <div class="empty-state-title">No Edge Devices Connected</div>
+                  <div class="empty-state-sub">Start an EdgeShield PC client or post JSON telemetry to <code>/metrics</code> to populate the registry.</div>
+                </div>
+              </td>
+            </tr>
+          `;
           return;
         }}
 
         tbody.innerHTML = data.devices.map(d => `
           <tr>
             <td>
-              <span class="status-pill ${{d.is_online ? 'status-online' : 'status-offline'}}">
-                ${{d.is_online ? 'ONLINE' : 'IDLE'}}
+              <span class="status-badge ${{d.is_online ? 'status-badge-online' : 'status-badge-offline'}}">
+                ${{d.is_online ? '<span class="dot-live"></span> ONLINE' : '&bull; IDLE'}}
               </span>
             </td>
-            <td style="font-family: monospace; font-weight: 600;">${{d.device_id || '-'}}</td>
+            <td style="font-family: var(--font-mono); font-weight: 600; color: var(--text-main);">${{d.device_id || '-'}}</td>
             <td>${{d.hostname || '-'}}</td>
-            <td>${{d.room ? '<span style="background: rgba(56,189,248,0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">' + d.room + '</span>' : '-'}}</td>
-            <td>${{d.type || '-'}}</td>
+            <td>${{d.room ? '<span class="badge-room">' + d.room + '</span>' : '<span class="badge-unassigned">Unassigned</span>'}}</td>
+            <td><code style="font-size: 0.8rem;">${{d.type || 'pc_telemetry'}}</code></td>
             <td>${{d.platform || '-'}}</td>
-            <td style="font-family: monospace;">${{d.client_ip || '-'}}</td>
-            <td style="color: var(--text-muted); font-size: 0.85rem;">${{d.last_seen_utc ? d.last_seen_utc.replace('T', ' ').substring(0, 19) : '-'}}</td>
+            <td style="font-family: var(--font-mono); color: var(--text-muted);">${{d.client_ip || '-'}}</td>
+            <td style="color: var(--text-muted); font-size: 0.84rem;" title="${{d.last_seen_utc || ''}}">
+              ${{formatRelativeTime(d.last_seen_utc)}}
+            </td>
           </tr>
         `).join('');
       }} catch (e) {{}}
@@ -845,22 +1181,23 @@ def render_console_html() -> str:
     async function loadLogs(force) {{
       if (!force && !document.getElementById('chk-auto-logs').checked && currentTab !== 'logs') return;
       try {{
-        const res = await fetch('/api/console/logs?limit=150');
+        const res = await fetch('/api/console/logs?limit=200');
         if (!res.ok) return;
         const data = await res.json();
         const terminal = document.getElementById('log-terminal');
 
         if (!data.logs || data.logs.length === 0) {{
-          terminal.innerHTML = '<div style="color: var(--text-muted);">No logs captured in buffer yet.</div>';
+          terminal.innerHTML = '<div class="empty-state"><div class="empty-state-title">No Logs Recorded</div><div class="empty-state-sub">Operational server logs will stream here automatically.</div></div>';
           return;
         }}
 
         terminal.innerHTML = data.logs.map(l => {{
           const lvlClass = 'lvl-' + (l.level || 'INFO');
-          return `<div class="log-line"><span style="color: var(--text-muted);">[${{l.timestamp ? l.timestamp.substring(11, 19) : ''}}]</span> <span class="${{lvlClass}}">[${{l.level}}]</span> <span style="color: #64748b;">[${{l.logger}}]</span> ${{l.message}}</div>`;
+          const timeShort = l.timestamp ? l.timestamp.substring(11, 19) : '';
+          return `<div class="log-line"><span style="color: var(--text-dim); margin-right: 6px;">[${{timeShort}}]</span><span class="${{lvlClass}}" style="margin-right: 6px;">[${{l.level}}]</span><span style="color: #64748b; margin-right: 8px;">[${{l.logger}}]</span>${{l.message}}</div>`;
         }}).join('');
 
-        // Scroll to bottom
+        // Auto-scroll to bottom of log stream
         terminal.scrollTop = terminal.scrollHeight;
       }} catch (e) {{}}
     }}
@@ -875,7 +1212,7 @@ def render_console_html() -> str:
       refreshStatus();
       if (currentTab === 'devices') loadDevices();
       if (document.getElementById('chk-auto-logs').checked && currentTab === 'logs') loadLogs();
-    }}, 3500);
+    }}, 3000);
   </script>
 </body>
 </html>"""

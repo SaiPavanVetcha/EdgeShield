@@ -303,6 +303,8 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         self.assertIn("EdgeShield Central Server", body)
         self.assertIn("/api/console/status", body)
         self.assertIn("/console", body)
+        self.assertIn("btn-cta", body)
+        self.assertIn("pill-mode", body)
 
     def test_landing_page_json_content_negotiation(self):
         req = DummyRequest(headers={"accept": "application/json"})
@@ -322,6 +324,9 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         self.assertIn("btn-flush-now", body)
         self.assertIn("btn-mode-local", body)
         self.assertIn("btn-mode-databricks", body)
+        self.assertIn("badge-unassigned", body)
+        self.assertIn("chk-auto-logs", body)
+        self.assertIn("mode-help-text", body)
 
 
 if __name__ == "__main__":
