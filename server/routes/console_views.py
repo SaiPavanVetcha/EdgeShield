@@ -4,25 +4,29 @@ from runtime_config import get_storage_mode
 
 
 def render_landing_html(status_data: Dict[str, Any]) -> str:
-    """Renders the upgraded professional HTML landing page for EdgeShield Central Server."""
+    """Renders the upgraded product marketing landing page for EdgeShield Central Server."""
     spool_pending = status_data.get("spool", {}).get("pending", 0)
     devices = status_data.get("devices", {})
     devices_online = devices.get("online", 0)
     devices_total = devices.get("total", 0)
     storage_mode = status_data.get("storage_mode", get_storage_mode())
     uptime_sec = status_data.get("uptime_seconds", 0)
+    advertised_url = status_data.get("advertised_url", f"http://{HOST}:{PORT}")
+    advertised_host = status_data.get("advertised_host", HOST)
+    listen_host = status_data.get("listen_host", HOST)
+    listen_port = status_data.get("listen_port", PORT)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EdgeShield Central Server</title>
+  <title>EdgeShield &bull; Edge Devices &rarr; Lakehouse &rarr; Intelligent Monitoring</title>
   <style>
     :root {{
       --bg-page: #080c14;
       --bg-card: #0f172a;
-      --bg-subtle: #162036;
+      --bg-subtle: #141e33;
       --border-subtle: #1e293b;
       --border-medium: #334155;
       --border-accent: #38bdf8;
@@ -50,17 +54,21 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 1.5rem;
-      background-image: radial-gradient(circle at 50% 10%, rgba(56, 189, 248, 0.05) 0%, transparent 60%);
+      padding: 2rem 1.5rem;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.08) 0%, transparent 65%),
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 32px 32px, 32px 32px;
     }}
     .container {{
-      max-width: 760px;
+      max-width: 900px;
       width: 100%;
       background: var(--bg-card);
       border: 1px solid var(--border-subtle);
-      border-radius: 16px;
-      padding: 2.5rem;
-      box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.65);
+      border-radius: 20px;
+      padding: 2.75rem;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.75);
     }}
     .header {{
       display: flex;
@@ -69,36 +77,47 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       margin-bottom: 0.75rem;
     }}
     .logo-badge {{
-      width: 52px;
-      height: 52px;
+      width: 56px;
+      height: 56px;
       background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
-      border-radius: 14px;
+      border-radius: 16px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 800;
-      font-size: 1.4rem;
+      font-size: 1.5rem;
       color: white;
-      box-shadow: 0 8px 20px -4px rgba(37, 99, 235, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 10px 25px -4px rgba(37, 99, 235, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.25);
     }}
-    h1 {{
-      font-size: 1.85rem;
-      font-weight: 700;
-      letter-spacing: -0.025em;
-      color: var(--text-main);
+    .wordmark {{
+      background: linear-gradient(135deg, #ffffff 0%, #38bdf8 50%, #60a5fa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 2.15rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }}
+    .tagline {{
+      color: var(--accent);
+      font-size: 0.98rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-top: 0.2rem;
     }}
     .subtitle {{
       color: var(--text-muted);
-      font-size: 1.02rem;
+      font-size: 1.05rem;
       line-height: 1.6;
+      margin-top: 1rem;
       margin-bottom: 2rem;
     }}
     .status-section {{
-      margin-bottom: 2rem;
+      margin-bottom: 2.25rem;
     }}
     .section-label {{
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -153,27 +172,34 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       0%, 100% {{ opacity: 1; transform: scale(1); }}
       50% {{ opacity: 0.4; transform: scale(0.85); }}
     }}
-    /* Hero CTA Button */
+    /* Hero CTA Box */
     .hero-cta-box {{
-      margin-bottom: 2rem;
-      padding: 1.25rem;
-      background: linear-gradient(135deg, rgba(2, 132, 199, 0.12) 0%, rgba(37, 99, 235, 0.05) 100%);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      border-radius: 12px;
+      margin-bottom: 2.25rem;
+      padding: 1.5rem;
+      background: linear-gradient(135deg, rgba(2, 132, 199, 0.15) 0%, rgba(37, 99, 235, 0.08) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 14px;
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 1rem;
+      gap: 1.25rem;
     }}
     .cta-text {{
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       color: var(--text-main);
-      font-weight: 500;
+      font-weight: 600;
     }}
     .cta-sub {{
-      font-size: 0.82rem;
+      font-size: 0.85rem;
       color: var(--text-muted);
-      margin-top: 0.2rem;
+      margin-top: 0.25rem;
+    }}
+    .cta-buttons {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
     }}
     .btn-cta {{
       display: inline-flex;
@@ -182,7 +208,7 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
       color: white;
       padding: 0.75rem 1.4rem;
-      border-radius: 9px;
+      border-radius: 10px;
       font-size: 0.95rem;
       font-weight: 600;
       text-decoration: none;
@@ -194,9 +220,62 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(2, 132, 199, 0.55);
     }}
+    .btn-secondary {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--bg-subtle);
+      color: var(--text-main);
+      border: 1px solid var(--border-medium);
+      padding: 0.75rem 1.2rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }}
+    .btn-secondary:hover {{
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.08);
+      transform: translateY(-2px);
+    }}
+    /* 4 Feature Cards Grid */
+    .features-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 1.1rem;
+      margin-bottom: 2.25rem;
+    }}
+    .feature-card {{
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.25rem;
+      transition: all 0.2s ease;
+    }}
+    .feature-card:hover {{
+      border-color: var(--border-accent);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
+    }}
+    .feature-title {{
+      font-weight: 700;
+      font-size: 0.98rem;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }}
+    .feature-desc {{
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }}
     .links-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 0.9rem;
     }}
     .link-card {{
@@ -226,18 +305,20 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       color: var(--text-muted);
     }}
     .footer {{
-      margin-top: 2rem;
-      padding-top: 1.25rem;
+      margin-top: 2.25rem;
+      padding-top: 1.5rem;
       border-top: 1px solid var(--border-subtle);
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
+      gap: 1rem;
       font-size: 0.82rem;
       color: var(--text-dim);
     }}
     code {{
       font-family: var(--font-mono);
-      background: rgba(0, 0, 0, 0.3);
+      background: rgba(0, 0, 0, 0.35);
       padding: 0.2rem 0.45rem;
       border-radius: 4px;
       color: var(--accent);
@@ -249,19 +330,23 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
     <div class="header">
       <div class="logo-badge">ES</div>
       <div>
-        <h1>EdgeShield Central Server</h1>
+        <h1 class="wordmark">EdgeShield Central Server</h1>
+        <div class="tagline">Edge Devices &rarr; Lakehouse &rarr; Intelligent Monitoring</div>
       </div>
     </div>
     <p class="subtitle">
-      Real-time edge telemetry ingestion & operational monitoring console.
+      Industrial-grade edge telemetry ingestion platform featuring transactional local spooling, dual-mode persistence, and direct Medallion Lakehouse streaming.
     </p>
 
     <!-- Operational Status Pills -->
     <div class="status-section">
-      <div class="section-label">Operational Status</div>
+      <div class="section-label">Live Operational Telemetry</div>
       <div class="pills">
         <div class="pill pill-green" title="Ingestion service is active and accepting metrics">
           <span class="dot-pulse"></span> Server: Online
+        </div>
+        <div class="pill pill-purple" title="Active persistence mode (local spool vs Databricks lakehouse)">
+          Storage: <span id="pill-mode" style="font-weight: 700; text-transform: uppercase; margin-left: 3px;">{storage_mode}</span>
         </div>
         <div class="pill pill-amber" title="Records waiting in durable SQLite spool">
           Spool: <span id="pill-spool" style="font-weight: 700; margin-left: 3px;">{spool_pending}</span>&nbsp;pending
@@ -269,26 +354,63 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
         <div class="pill pill-accent" title="Active edge devices within last 120s vs total known">
           Devices: <span id="pill-devices" style="font-weight: 700; margin-left: 3px;">{devices_online} online / {devices_total} total</span>
         </div>
-        <div class="pill pill-purple" title="Active persistence mode (local spool vs Databricks lakehouse)">
-          Storage: <span id="pill-mode" style="font-weight: 700; text-transform: uppercase; margin-left: 3px;">{storage_mode}</span>
+        <div class="pill pill-accent" title="Primary advertised endpoint for edge device ingestion">
+          Ingest URL: <span id="pill-advertised" style="font-family: var(--font-mono); font-weight: 700; margin-left: 3px;">{advertised_url}</span>
         </div>
       </div>
     </div>
 
-    <!-- Hero CTA -->
+    <!-- Hero CTA Box with 3 CTAs -->
     <div class="hero-cta-box">
       <div>
-        <div class="cta-text">EdgeShield Server Console</div>
+        <div class="cta-text">EdgeShield Server Ops Console</div>
         <div class="cta-sub">Inspect edge fleet, manage spool flush, toggle storage mode & view live logs</div>
       </div>
-      <a class="btn-cta" href="/console">
-        <span>Open Ops Console</span>
-        <span>&rarr;</span>
-      </a>
+      <div class="cta-buttons">
+        <a class="btn-cta" href="/console">
+          <span>Open Ops Console</span>
+          <span>&rarr;</span>
+        </a>
+        <a class="btn-secondary" href="/health" target="_blank">
+          <span>Health Check</span>
+        </a>
+        <a class="btn-secondary" href="/docs" target="_blank">
+          <span>API Docs</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- 4 Feature Cards -->
+    <div class="section-label">Architecture &amp; Core Capabilities</div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-title">&#x1F4BB; Mixed Edge Clients</div>
+        <div class="feature-desc">
+          High-frequency Windows/Linux PC collectors and ESP32 microcontrollers with room dimension tagging, battery presence gating, and durable SQLite spool fallback.
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-title">&#x26A1; FastAPI Ingest Hub</div>
+        <div class="feature-desc">
+          Asynchronous, sub-10ms HTTP ingestion engine with atomic SQLite disk commits, zero-loss queuing, and live non-loopback network auto-discovery.
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-title">&#x1F3D7;&#xFE0F; Databricks Medallion</div>
+        <div class="feature-desc">
+          Automated multi-table Bronze landing (<code>edgeshield_db</code>), Silver schema cleaning with room preservation, and Gold aggregation dimensions (<code>dim_device</code>).
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-title">&#x1F512; Clean Gold Access</div>
+        <div class="feature-desc">
+          Parameter-safe SQL analytics services, room-scoped KPIs, and intelligent alerting rules that eliminate false positives on AC-powered hardware.
+        </div>
+      </div>
     </div>
 
     <!-- Secondary Links Grid -->
-    <div class="section-label">API & Service Endpoints</div>
+    <div class="section-label">System &amp; Diagnostic Endpoints</div>
     <div class="links-grid">
       <a class="link-card" href="/console">
         <span class="link-title">/console</span>
@@ -296,20 +418,20 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       </a>
       <a class="link-card" href="/api/console/status" target="_blank">
         <span class="link-title">GET /api/console/status</span>
-        <span class="link-desc">Live status, storage mode & spool health</span>
+        <span class="link-desc">Live status, storage mode &amp; spool health</span>
       </a>
       <a class="link-card" href="/api/console/devices" target="_blank">
         <span class="link-title">GET /api/console/devices</span>
-        <span class="link-desc">Known device registry & metadata</span>
+        <span class="link-desc">Connected edge devices registry</span>
       </a>
-      <a class="link-card" href="/health" target="_blank">
-        <span class="link-title">GET /health</span>
-        <span class="link-desc">Standard service health JSON</span>
+      <a class="link-card" href="/api/console/export?format=jsonl" target="_blank">
+        <span class="link-title">GET /api/console/export</span>
+        <span class="link-desc">Snapshot download of local spool</span>
       </a>
     </div>
 
     <div class="footer">
-      <span>Bind: <code>{HOST}:{PORT}</code></span>
+      <span>Primary Host: <code id="footer-adv">{advertised_host}</code> &bull; Bind: <code>{listen_host}:{listen_port}</code></span>
       <span id="uptime-display">Uptime: {uptime_sec}s</span>
     </div>
   </div>
@@ -329,12 +451,19 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
         if (data.storage_mode) {{
           document.getElementById('pill-mode').textContent = data.storage_mode.toUpperCase();
         }}
+        if (data.advertised_url) {{
+          document.getElementById('pill-advertised').textContent = data.advertised_url;
+        }}
+        if (data.advertised_host) {{
+          const foot = document.getElementById('footer-adv');
+          if (foot) foot.textContent = data.advertised_host;
+        }}
         if (data.uptime_seconds !== undefined) {{
           document.getElementById('uptime-display').textContent = `Uptime: ${{data.uptime_seconds}}s`;
         }}
       }} catch (err) {{}}
     }}
-    setInterval(refreshStatus, 3500);
+    setInterval(refreshStatus, 3000);
   </script>
 </body>
 </html>"""

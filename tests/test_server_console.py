@@ -20,6 +20,7 @@ from routes.console_api import (
     get_console_status,
     manual_flush,
     update_storage_mode,
+    export_spool,
 )
 from routes.metrics import receive_metrics
 import server
@@ -256,6 +257,12 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         self.assertTrue(data["server_online"])
         self.assertIn("host", data)
         self.assertIn("port", data)
+        self.assertIn("listen_host", data)
+        self.assertIn("listen_port", data)
+        self.assertIn("advertised_host", data)
+        self.assertIn("advertised_url", data)
+        self.assertTrue(data["advertised_host"])
+        self.assertTrue(data["advertised_url"].startswith("http://"))
         self.assertIn("uptime_seconds", data)
         self.assertIn("storage_mode", data)
         self.assertIn("databricks_configured", data)
@@ -263,6 +270,24 @@ class TestServerConsoleEndpoints(unittest.TestCase):
         self.assertIn("last_flush", data)
         self.assertIn("spool", data)
         self.assertIn("devices", data)
+
+    def test_export_spool_endpoint(self):
+        # 1. JSONL export
+        resp_jsonl = export_spool(format="jsonl")
+        self.assertEqual(resp_jsonl.status_code, 200)
+        self.assertIn("application/x-ndjson", resp_jsonl.media_type)
+        self.assertIn("edgeshield_spool_", resp_jsonl.headers.get("content-disposition", ""))
+
+        # 2. SQLite export
+        resp_sqlite = export_spool(format="sqlite")
+        self.assertEqual(resp_sqlite.status_code, 200)
+        self.assertIn("sqlite3", resp_sqlite.media_type)
+        self.assertIn(".db", resp_sqlite.headers.get("content-disposition", ""))
+
+        # 3. Invalid format
+        with self.assertRaises(HTTPException) as ctx:
+            export_spool(format="xml")
+        self.assertEqual(ctx.exception.status_code, 400)
 
     def test_console_devices_endpoint(self):
         payload = {

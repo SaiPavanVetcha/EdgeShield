@@ -25,6 +25,10 @@ export interface ConsoleStatusResponse {
   server_online: boolean;
   host: string;
   port: number;
+  listen_host: string;
+  listen_port: number;
+  advertised_host: string;
+  advertised_url: string;
   uptime_seconds: number;
   storage_mode: 'local' | 'databricks';
   databricks_configured: boolean;

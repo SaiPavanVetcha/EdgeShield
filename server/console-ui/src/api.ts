@@ -55,4 +55,18 @@ export const consoleApi = {
   async getLogs(limit: number = 150): Promise<LogsResponse> {
     return fetchJson<LogsResponse>(`/api/console/logs?limit=${limit}`);
   },
+
+  getExportUrl(format: 'jsonl' | 'sqlite' = 'jsonl'): string {
+    return `/api/console/export?format=${format}`;
+  },
+
+  downloadSpoolExport(format: 'jsonl' | 'sqlite' = 'jsonl'): void {
+    const url = `/api/console/export?format=${format}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', '');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
 };

@@ -9,6 +9,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Database,
+  Copy,
+  Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { consoleApi } from './api';
 import {
@@ -42,13 +45,17 @@ export const App: React.FC = () => {
   const [isFlushing, setIsFlushing] = useState(false);
   const [lastFlushResult, setLastFlushResult] = useState<FlushResponse | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+
+  // Storage mode confirmation modal state
+  const [showConfirmCloudModal, setShowConfirmCloudModal] = useState(false);
 
   // Live polling controls
   const [liveStreamLogs, setLiveStreamLogs] = useState(true);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
-    setTimeout(() => setNotification(null), 4000);
+    setTimeout(() => setNotification(null), 4500);
   };
 
   const fetchStatus = useCallback(async () => {
@@ -116,7 +123,7 @@ export const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [liveStreamLogs, activeTab, fetchLogs]);
 
-  const handleSwitchMode = async (targetMode: 'local' | 'databricks') => {
+  const executeSwitchMode = async (targetMode: 'local' | 'databricks') => {
     setIsSwitchingMode(true);
     try {
       const res = await consoleApi.setStorageMode(targetMode);
@@ -130,13 +137,31 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleRequestSwitchMode = (targetMode: 'local' | 'databricks') => {
+    if (status?.storage_mode === targetMode) return;
+
+    // When switching Local -> Cloud with pending > 0, confirm with the operator
+    const pendingCount = status?.pending ?? status?.spool?.pending ?? 0;
+    if (targetMode === 'databricks' && pendingCount > 0) {
+      setShowConfirmCloudModal(true);
+      return;
+    }
+
+    executeSwitchMode(targetMode);
+  };
+
+  const handleConfirmSwitchCloud = async () => {
+    setShowConfirmCloudModal(false);
+    await executeSwitchMode('databricks');
+  };
+
   const handleTriggerFlush = async () => {
     setIsFlushing(true);
     try {
       const res = await consoleApi.triggerFlush();
       setLastFlushResult(res);
       showNotification('success', res.message || 'Flush cycle triggered successfully');
-      await Promise.all([fetchStatus(), fetchLogs()]);
+      await Promise.all([fetchStatus(), fetchDevices(), fetchLogs()]);
       return res;
     } catch (err: any) {
       showNotification('error', err.message || 'Flush cycle failed');
@@ -147,11 +172,22 @@ export const App: React.FC = () => {
 
   const pendingSpool = status?.pending ?? status?.spool?.pending ?? 0;
   const isLocal = status?.storage_mode === 'local';
+  const advertisedHost = status?.advertised_host || status?.host || '127.0.0.1';
+  const advertisedPort = status?.listen_port || status?.port || 5000;
+  const advertisedUrl = status?.advertised_url || `http://${advertisedHost}:${advertisedPort}`;
+  const listenHost = status?.listen_host || status?.host || '0.0.0.0';
+  const listenPort = status?.listen_port || status?.port || 5000;
+
+  const handleCopyAdvertisedUrl = () => {
+    navigator.clipboard.writeText(advertisedUrl);
+    setCopiedUrl(true);
+    setTimeout(() => setCopiedUrl(false), 2000);
+  };
 
   return (
     <div className="min-h-screen bg-[#080c14] text-slate-100 flex flex-col font-sans">
       {/* Top Header Bar */}
-      <header className="bg-[#0b1021]/90 backdrop-blur-md border-b border-slate-800/80 px-6 py-3.5 sticky top-0 z-30 shadow-md">
+      <header className="bg-[#0b1021]/95 backdrop-blur-md border-b border-slate-800/80 px-6 py-3.5 sticky top-0 z-30 shadow-md">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           {/* Logo & Product Title */}
           <div className="flex items-center gap-3">
@@ -167,13 +203,23 @@ export const App: React.FC = () => {
                   v1.1
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-mono">
-                Ingest Control Plane &bull; {status?.host || '0.0.0.0'}:{status?.port || 5000}
-              </p>
+              <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono mt-0.5">
+                <span className="text-slate-400">Ingest:</span>
+                <span className="text-sky-300 font-semibold">{advertisedUrl}</span>
+                <button
+                  onClick={handleCopyAdvertisedUrl}
+                  className="p-0.5 text-slate-400 hover:text-white transition-colors"
+                  title="Copy Ingest URL"
+                >
+                  {copiedUrl ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                </button>
+                <span className="text-slate-600">&bull;</span>
+                <span className="text-slate-500">Bind: {listenHost}:{listenPort}</span>
+              </div>
             </div>
           </div>
 
-          {/* Status Badges & Controls */}
+          {/* Status Badges & Segmented Mode Toggle */}
           <div className="flex items-center gap-3">
             {/* Server Online Badge */}
             <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950/40 text-emerald-400 border border-emerald-800/40">
@@ -181,14 +227,34 @@ export const App: React.FC = () => {
               Online
             </div>
 
-            {/* Storage Mode Badge */}
-            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-              isLocal
-                ? 'bg-amber-950/40 text-amber-300 border border-amber-800/40'
-                : 'bg-sky-950/40 text-sky-300 border border-sky-800/40'
-            }`}>
-              <Database className="w-3.5 h-3.5" />
-              <span className="capitalize">{status?.storage_mode || 'Loading...'} Mode</span>
+            {/* Segmented Storage Mode Control */}
+            <div className="inline-flex p-0.5 bg-slate-900 border border-slate-700/80 rounded-lg">
+              <button
+                onClick={() => handleRequestSwitchMode('local')}
+                disabled={isSwitchingMode}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                  isLocal
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Local Mode: retain records in SQLite without auto-flushing to cloud"
+              >
+                <HardDrive className="w-3 h-3" />
+                <span>Local</span>
+              </button>
+              <button
+                onClick={() => handleRequestSwitchMode('databricks')}
+                disabled={isSwitchingMode}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                  !isLocal
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Cloud Mode: stream spooled records to Databricks Lakehouse"
+              >
+                <Database className="w-3 h-3" />
+                <span>Cloud</span>
+              </button>
             </div>
 
             {/* Refresh All Button */}
@@ -318,7 +384,7 @@ export const App: React.FC = () => {
           {activeTab === 'overview' && (
             <OverviewTab
               status={status}
-              onSwitchMode={handleSwitchMode}
+              onSwitchMode={handleRequestSwitchMode}
               isSwitchingMode={isSwitchingMode}
               onTriggerFlush={handleTriggerFlush}
               isFlushing={isFlushing}
@@ -361,6 +427,64 @@ export const App: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* Confirmation Modal: Switching Local -> Cloud with Pending Records */}
+      {showConfirmCloudModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-sky-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-100">
+                  Switch to Cloud (Databricks) Mode
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Enable automated cloud streaming for pending telemetry
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3.5 text-xs text-amber-200/90 space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-amber-300">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{pendingSpool} pending records in local SQLite spool</span>
+              </div>
+              <p className="leading-relaxed text-slate-300">
+                Switching to Cloud mode will activate background flushing. Spool batches will be transmitted into Databricks SQL landing tables.
+              </p>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
+              <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Transactional Guarantee:</span>
+              </div>
+              <p className="leading-relaxed">
+                Records are deleted from local disk <strong>only after</strong> a successful Databricks transaction commit. If connection fails, data remains safely buffered locally.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowConfirmCloudModal(false)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSwitchCloud}
+                disabled={isSwitchingMode}
+                className="px-5 py-2 rounded-lg text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/25 transition-all flex items-center gap-2"
+              >
+                {isSwitchingMode ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : null}
+                <span>Confirm Switch to Cloud</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 px-6 py-4 text-xs text-slate-500 bg-[#060910]">

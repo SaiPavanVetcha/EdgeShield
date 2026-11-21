@@ -167,3 +167,28 @@ def maybe_trim(max_records: int = SPOOL_MAX_RECORDS) -> int:
 
     print(f"[!] Warning: Server spool exceeded {max_records} records. Dropped {dropped} oldest record(s).")
     return dropped
+
+
+def export_all() -> List[Dict[str, Any]]:
+    """
+    Returns all records currently in the spool in FIFO order.
+    Returns a list of dicts with id, created_at, and parsed payload.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, created_at, payload_json FROM spool ORDER BY id ASC")
+        rows = cursor.fetchall()
+
+    records: List[Dict[str, Any]] = []
+    for row_id, created_at, payload_json in rows:
+        try:
+            payload = json.loads(payload_json)
+        except Exception:
+            payload = {"raw_payload": payload_json}
+        records.append({
+            "id": row_id,
+            "created_at": created_at,
+            "payload": payload,
+        })
+    return records
+
