@@ -60,14 +60,27 @@ To ensure smooth evaluation, reviewers should account for the following current 
 * **Alert Acknowledgments:** Alert acknowledgments in the Web Dashboard are held in backend memory. Restarting the backend process clears acknowledgment flags until persisted in a Delta table (scheduled for v2).
 * **Room-Scoped Alert Rules (In Progress):** The alert engine currently evaluates heuristic rules across fleet-wide recent telemetry. Dynamic room filtering on active alerts is currently in progress.
 
-### 3.4 Databricks DDL Migration for Room Dimension
-* **New Deployments:** Fresh deployments using the repository DDL notebooks automatically provision `room STRING` in `edgeshield_db.system_metrics` and `edgeshield_lakehouse.bronze.system_metrics`.
-* **Pre-existing Lakehouses:** When pointing an upgraded server to a pre-v1.1 Databricks environment, administrators must apply schema alterations:
+### 3.4 Databricks DDL Migration & Lakehouse Gold Recompute for Room
+* **New Deployments:** Fresh deployments using the repository DDL notebooks (`edgeshield_etl_pipeline/ddl/`) automatically provision `room STRING` in `edgeshield_db.system_metrics`, `edgeshield_lakehouse.bronze.system_metrics`, and `edgeshield_lakehouse.gold.dim_device`.
+* **Pre-existing Lakehouses:** When pointing an upgraded server and ETL pipeline to an existing pre-v1.1 Databricks environment, administrators should apply these non-destructive schema alterations in a SQL notebook:
   ```sql
+  -- Ingestion landing table
   ALTER TABLE edgeshield_db.system_metrics ADD COLUMN IF NOT EXISTS room STRING;
+
+  -- Bronze lakehouse table
   ALTER TABLE edgeshield_lakehouse.bronze.system_metrics ADD COLUMN IF NOT EXISTS room STRING;
+
+  -- Silver lakehouse table (if schema was explicitly declared)
+  ALTER TABLE edgeshield_lakehouse.silver.cleaned_system_metrics ADD COLUMN IF NOT EXISTS room STRING;
+
+  -- Gold dimension table (if existing)
+  ALTER TABLE edgeshield_lakehouse.gold.dim_device ADD COLUMN IF NOT EXISTS room STRING;
   ```
-  If unmigrated, the server automatically falls back to omitting the `room` column to prevent ingestion errors. Rebuilding `dim_device` from historical Bronze/Silver data ensures legacy devices are attributed to their latest reported room.
+  If the ingestion table is unmigrated, the server automatically falls back to omitting the `room` column to prevent batch write failures.
+* **Full Refresh / Recomputing Gold `dim_device`:**
+  - In the Databricks UI under **Delta Live Tables $\to$ Pipelines**, trigger a **Full Refresh** on the pipeline (or click on `dim_device` and select **Refresh Selected**).
+  - Because `dim_device` is defined as a materialized view (`@dp.materialized_view`), a pipeline refresh automatically drops and re-evaluates the view with the new `room` column—no manual `UPDATE` or table surgery is needed.
+  - **Historical Rows:** Telemetry events ingested prior to v1.1 will carry `room = NULL`. As soon as endpoints transmit updated payloads containing `room`, the latest non-null room assignment is attributed to `dim_device` for that device. Complete lakehouse rebuilds are optional and safe.
 
 ---
 
