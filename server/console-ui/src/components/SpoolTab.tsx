@@ -292,11 +292,11 @@ export const SpoolTab: React.FC<SpoolTabProps> = ({
             </li>
             <li className="flex items-start gap-2">
               <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-              <span><strong>Atomic Transactions:</strong> Ingest into Databricks multi-table landing uses all-or-nothing transactions.</span>
+              <span><strong>App-Level Durability:</strong> Spool records are deleted from local disk only after all constituent table inserts for that payload succeed.</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-              <span><strong>Zero Data Loss:</strong> Spool records are pruned only upon successful database commit.</span>
+              <span><strong>Zero Data Loss:</strong> Spool records are retained on disk if any insert fails or if the warehouse is unreachable.</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />

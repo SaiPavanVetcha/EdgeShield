@@ -3,14 +3,14 @@
 > **High-throughput FastAPI ingestion service with durable SQLite spooling, dual storage modes, and operational Server Console.**  
 > For the overall system architecture and end-to-end pipeline, see the [Root README](../README.md).
 
-The Central Ingestion Server receives real-time telemetry payloads over HTTP from edge devices (PC clients and ESP32 microcontrollers). It commits incoming payloads immediately to a local SQLite durable spool (`spool/server_spool.db`) to return rapid sub-10ms `HTTP 200` responses. A background worker flushes batches into Databricks SQL landing tables with atomic transaction semantics, or operates in local mode for zero-cloud pilot testing.
+The Central Ingestion Server receives real-time telemetry payloads over HTTP from edge devices (PC clients and ESP32 microcontrollers). It commits incoming payloads immediately to a local SQLite durable spool (`spool/server_spool.db`) to return rapid sub-10ms `HTTP 200` responses. A background worker flushes batches into Databricks SQL landing tables with app-level all-or-nothing spool deletion guarantees, or operates in local mode for zero-cloud pilot testing.
 
 ---
 
 ## Architectural Highlights
 
 1. **Durable Local Spooling (`server_spool.db`):** Inbound telemetry is durably committed to SQLite before cloud transmission. Network partitions or Databricks outages never drop edge data.
-2. **Transactional All-or-Nothing Cloud Ingest:** Multi-table inserts (system, CPU, RAM, disk, battery, environment) for a single payload are executed within an atomic database transaction. Spool records are deleted only after the transaction fully commits.
+2. **App-Level All-or-Nothing Cloud Ingest:** Multi-table inserts (system, CPU, RAM, disk, battery, environment) for a single payload are executed against Databricks landing tables. Note: workspace and Hive metastore landing tables (`edgeshield_db.*`) are non-catalog-managed and do not support multi-statement SQL transactions (`TRANSACTION_NOT_SUPPORTED.WRITE_NON_CATALOG_MANAGED_TABLE`). Durability is guaranteed at the application level: a spool record is deleted from local disk **only if every insert for that payload succeeds**. On any failure, the spool row is retained for automatic retry.
 3. **Dual Storage Modes (`local` vs. `databricks`):**
    - **`local` Mode:** Telemetry is durably spooled on disk and tracked in the in-memory device registry without connecting to Databricks. Enables instant local pilot testing without cloud accounts or credentials.
    - **`databricks` Mode:** Spooled records are flushed periodically to the Databricks Lakehouse landing tables.

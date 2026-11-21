@@ -459,10 +459,10 @@ export const App: React.FC = () => {
             <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
               <div className="font-semibold text-slate-200 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Transactional Guarantee:</span>
+                <span>App-Level Durability Guarantee:</span>
               </div>
               <p className="leading-relaxed">
-                Records are deleted from local disk <strong>only after</strong> a successful Databricks transaction commit. If connection fails, data remains safely buffered locally.
+                Records are deleted from local disk <strong>only after</strong> all constituent table inserts for that payload succeed. If an insert fails, data remains safely buffered locally for retry.
               </p>
             </div>
 

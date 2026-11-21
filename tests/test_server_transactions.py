@@ -86,6 +86,23 @@ class TestServerTransactions(unittest.TestCase):
         self.assertNotIn("room", second_call_sql)
         self.assertFalse(database._has_room_column)
 
+    @patch("database.sql.connect")
+    def test_get_connection_uses_ignore_transactions_true(self, mock_connect):
+        with patch.object(database, "DATABRICKS_HOST", "test-host"), \
+             patch.object(database, "DATABRICKS_HTTP_PATH", "/test/path"), \
+             patch.object(database, "DATABRICKS_TOKEN", "test-token"):
+            database.get_connection()
+        mock_connect.assert_called_once_with(
+            ignore_transactions=True,
+            server_hostname="test-host",
+            http_path="/test/path",
+            access_token="test-token",
+        )
+
+    def test_init_connection_transactions_returns_false(self):
+        mock_conn = MagicMock()
+        self.assertFalse(database.init_connection_transactions(mock_conn))
+
     @patch("database.get_connection")
     @patch("database.fetch_batch")
     @patch("database.delete_ids")
@@ -93,8 +110,6 @@ class TestServerTransactions(unittest.TestCase):
     def test_flush_spool_transaction_success(self, mock_count, mock_delete_ids, mock_fetch_batch, mock_get_conn):
         mock_count.side_effect = [2, 0]
         mock_conn = MagicMock()
-        mock_conn.ignore_transactions = False
-        mock_conn.autocommit = False
         mock_cursor = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
@@ -114,10 +129,10 @@ class TestServerTransactions(unittest.TestCase):
 
         self.assertEqual(sent, 2)
         self.assertEqual(failed, 0)
-        # Verify commit was called after each payload
-        self.assertEqual(mock_conn.commit.call_count, 2)
+        # Verify no SQL transactions are attempted on non-catalog-managed tables
+        mock_conn.commit.assert_not_called()
         mock_conn.rollback.assert_not_called()
-        # Verify delete_ids called for both records
+        # Verify delete_ids called only after every insert for that payload succeeds
         mock_delete_ids.assert_any_call([1])
         mock_delete_ids.assert_any_call([2])
 
@@ -125,13 +140,11 @@ class TestServerTransactions(unittest.TestCase):
     @patch("database.fetch_batch")
     @patch("database.delete_ids")
     @patch("database.count")
-    def test_flush_spool_transaction_failure_rollback_and_retain(
+    def test_flush_spool_failure_retains_spool(
         self, mock_count, mock_delete_ids, mock_fetch_batch, mock_get_conn
     ):
         mock_count.return_value = 2
         mock_conn = MagicMock()
-        mock_conn.ignore_transactions = False
-        mock_conn.autocommit = False
         mock_cursor = MagicMock()
 
         # Simulate failure during second metric insert of payload
@@ -165,8 +178,8 @@ class TestServerTransactions(unittest.TestCase):
 
         self.assertEqual(sent, 0)
         self.assertEqual(failed, 1)
-        # Verify rollback was called for the failed payload
-        mock_conn.rollback.assert_called_once()
+        # Verify no commit or rollback was invoked
+        mock_conn.rollback.assert_not_called()
         mock_conn.commit.assert_not_called()
         # Verify delete_ids was NEVER called (records retained in spool)
         mock_delete_ids.assert_not_called()

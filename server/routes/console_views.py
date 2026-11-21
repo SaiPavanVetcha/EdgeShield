@@ -988,7 +988,7 @@ def render_console_html() -> str:
           </div>
           <div class="mode-help-text" id="mode-help-text">
             <b>Local:</b> Telemetry records are safely appended to local SQLite spool without attempting cloud sync. Zero cloud failures.<br>
-            <b>Databricks:</b> Background worker transactionally flushes batches into Databricks SQL Warehouse. Spool records are deleted only on verified commit.
+            <b>Databricks:</b> Background worker flushes batches into Databricks SQL Warehouse. Spool records are deleted only after all payload inserts succeed.
           </div>
         </div>
       </div>
@@ -1050,7 +1050,7 @@ def render_console_html() -> str:
         <div class="card">
           <div class="card-label">Batch Size Limit</div>
           <div class="card-val" id="spool-batch-val">...</div>
-          <div class="card-desc">Maximum payload records per transaction</div>
+          <div class="card-desc">Maximum payload records per flush batch</div>
         </div>
       </div>
 
@@ -1070,7 +1070,7 @@ def render_console_html() -> str:
       </div>
 
       <div class="panel">
-        <div class="panel-title">Last Flush Transaction Detail</div>
+        <div class="panel-title">Last Flush Outcome Detail</div>
         <div id="spool-last-flush" style="font-size: 0.9rem; line-height: 1.8; margin-top: 0.85rem; color: var(--text-muted);">
           Loading...
         </div>

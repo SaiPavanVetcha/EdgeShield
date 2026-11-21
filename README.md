@@ -23,7 +23,7 @@ Traditional infrastructure monitoring frameworks (such as Prometheus, Grafana, D
 ### The EdgeShield Solution
 EdgeShield establishes a unified, fault-tolerant telemetry pipeline designed specifically for edge operational realities:
 1. **Local-First Durability:** Dual-stage SQLite spooling on both edge clients and the central ingestion server buffers telemetry during disconnections and flushes in FIFO batches upon reconnection.
-2. **Transactional Cloud Synchronization:** Ingestion server writes to Databricks SQL landing tables are wrapped in all-or-nothing database transactions, preventing partial data writes and guaranteeing delivery before spool purging.
+2. **App-Level All-or-Nothing Cloud Sync:** Ingestion server writes to Databricks SQL landing tables guarantee delivery before spool purging. Workspace/Hive landing tables do not support multi-statement database transactions (`TRANSACTION_NOT_SUPPORTED.WRITE_NON_CATALOG_MANAGED_TABLE`); durability is guaranteed at the application level by deleting spool records only after all constituent table inserts for a payload succeed.
 3. **Medallion Star Schema:** Databricks Delta Lake organizes raw events into Bronze landing tables, validates and cleans records in Silver, and projects analytical facts and a room-aware device dimension (`dim_device`) in Gold.
 4. **Context-Aware Monitoring:** The dashboard automatically adapts to device capabilities — suppressing battery indicators for stationary desktops, segmenting fleet health by physical room, and maintaining responsiveness during cloud warehouse sleep cycles.
 
@@ -43,7 +43,7 @@ flowchart TD
         ServerSpool["Durable SQLite Spool (server_spool.db)<br/>Sub-10ms Ingestion Buffer"]
         Console["Server Console (Web Ops UI)<br/>GET / · GET /console"]
         ModeSwitch{"Storage Mode<br/>(local vs. databricks)"}
-        TxWriter["Transactional Databricks Writer<br/>Atomic All-or-Nothing Commit"]
+        TxWriter["Databricks Flush Worker<br/>App-Level All-or-Nothing Commit"]
 
         Server --> ServerSpool
         ServerSpool --> ModeSwitch
@@ -76,7 +76,7 @@ flowchart TD
 2. **Immediate Server Buffering:** The Central Ingestion Server receives payloads at `POST /metrics`, records client IP and metadata in the in-memory device registry, commits to `server_spool.db`, and returns `HTTP 200` in `< 10ms`.
 3. **Storage Mode & Cloud Ingestion:**
    - In **`local` mode**, telemetry remains safely buffered on the server host for local pilots and testing without cloud accounts.
-   - In **`databricks` mode**, the background worker executes transactional multi-table inserts into Databricks SQL. Records are deleted from the spool only after the transaction fully commits.
+   - In **`databricks` mode**, the background worker executes multi-table inserts into Databricks SQL. Records are deleted from the local spool only after all constituent table inserts for that payload succeed.
 4. **Lakehouse Refinement:** Medallion pipelines process raw landing tables through Silver validation to Gold star schema tables (`dim_device`, `fact_cpu_telemetry`, `fact_ram_telemetry`, `fact_disk_telemetry`, `fact_battery_telemetry`, `fact_environment_telemetry`).
 5. **Analytical Visualization:** The Web Backend runs parameterized queries against the Gold layer, serving the React dashboard with sub-second KPI aggregation, time series charting, and room-scoped fleet analysis.
 
@@ -87,7 +87,7 @@ flowchart TD
 ### 1. Dual-Stage Durable Spooling & Zero-Loss Ingest
 - **Edge Resilience:** If the server is offline or unreachable, the client buffers telemetry in a local SQLite database (`telemetry_spool.db`). Once restored, pending records drain automatically.
 - **Server Resilience:** The central server commits inbound payloads to `server_spool.db` before cloud transmission. If Databricks is unreachable or suspended, telemetry accumulates safely on disk.
-- **Transactional Atomicity:** All inserts for a single payload are bound to an atomic database transaction. Spool records are purged only on complete transaction success, eliminating partial data writes.
+- **App-Level All-or-Nothing Durability:** Because workspace and Hive metastore landing tables do not support multi-statement SQL transactions, durability is enforced at the application level: spool records are purged only after every insert for that payload succeeds. On any error, records are retained in the spool for retry.
 
 ### 2. Dual Storage Modes (Local Pilot vs. Databricks Lakehouse)
 - **Runtime Mode Switcher:** Operators can toggle between `local` and `databricks` storage modes via the Server Console UI or REST API (`POST /api/console/storage-mode`).
@@ -227,7 +227,7 @@ For full technical specifications for external reviewers, consult [**docs/PILOT_
 | **Edge Hardware Telemetry** | CPU, RAM, Disk, Battery, ESP32 Temp/Humidity | Same + Battery presence detection & safe nulls | GPU metrics, fan speed, network I/O counters |
 | **Edge Offline Spooling** | In-memory only (lost on process exit) | **Durable SQLite spool (`telemetry_spool.db`)** | Dynamic bandwidth-throttled backoff |
 | **Server Ingestion Buffer** | In-memory batch queue | **Durable SQLite spool (`server_spool.db`)** | Distributed message broker (Kafka / Event Hub) |
-| **Cloud Synchronization** | Non-transactional batch writes | **Atomic multi-table transaction per payload** | Delta Live Tables streaming ingestion |
+| **Cloud Synchronization** | Non-transactional batch writes | **App-level all-or-nothing spool purge per payload** | Delta Live Tables streaming ingestion |
 | **Server Storage Modes** | Databricks only | **`local` (zero-cloud pilot) vs. `databricks`** | Hybrid tiered replication |
 | **Server Control Plane** | Raw `/` JSON status | **Server Console UI (`/` & `/console`) + REST APIs** | Centralized fleet configuration management |
 | **Physical Room Dimension** | Not supported | **Full-stack room tagging (`dim_device` & UI filter)** | Multi-facility hierarchical topology |

@@ -32,8 +32,14 @@ _last_flush_status: Dict[str, Any] = {
 
 def get_connection():
     """
-    Establishes connection to Databricks SQL Warehouse with transaction support.
-    Passes ignore_transactions=False so PEP 249 commit() and rollback() can be used.
+    Establishes connection to Databricks SQL Warehouse.
+    Uses default autocommit behavior (ignore_transactions=True).
+    
+    Architecture Note:
+    Workspace and Hive metastore landing tables (workspace.edgeshield_db.*) are
+    non-catalog-managed tables and do not support multi-statement SQL transactions
+    (TRANSACTION_NOT_SUPPORTED.WRITE_NON_CATALOG_MANAGED_TABLE). App-level all-or-nothing
+    spool deletion is the system durability guarantee.
     """
     kwargs = {
         "server_hostname": DATABRICKS_HOST,
@@ -41,24 +47,17 @@ def get_connection():
         "access_token": DATABRICKS_TOKEN,
     }
     try:
-        return sql.connect(ignore_transactions=False, **kwargs)
+        return sql.connect(ignore_transactions=True, **kwargs)
     except TypeError:
         return sql.connect(**kwargs)
 
 
 def init_connection_transactions(connection) -> bool:
     """
-    Configures the connection for transactional mode (autocommit=False).
-    Returns True if transaction management is supported and enabled, False otherwise.
+    Databricks workspace landing tables do not support multi-statement transactions.
+    Returns False to ensure the connection runs with standard autocommit execution.
     """
-    if getattr(connection, "ignore_transactions", True):
-        return False
-    try:
-        connection.autocommit = False
-        return True
-    except Exception as e:
-        print(f"[*] Databricks autocommit=False could not be set ({e}); falling back to non-transactional execution.")
-        return False
+    return False
 
 
 _has_room_column: Optional[bool] = None
@@ -135,11 +134,6 @@ def insert_single_payload(cursor, payload: Dict[str, Any], connection: Optional[
                 err_msg = str(e).lower()
                 if "room" in err_msg or "column" in err_msg or "cannot be resolved" in err_msg:
                     _has_room_column = False
-                    if connection and getattr(connection, "autocommit", True) is False:
-                        try:
-                            connection.rollback()
-                        except Exception:
-                            pass
                     cursor.execute(
                         """
                         INSERT INTO edgeshield_db.system_metrics 
@@ -267,10 +261,18 @@ def insert_single_payload(cursor, payload: Dict[str, Any], connection: Optional[
 def flush_spool_to_databricks() -> Tuple[int, int]:
     """
     Drains pending records from the local durable spool and inserts them into Databricks.
-    Inserts for each payload are executed inside an atomic transaction (all-or-nothing).
-    Removes records from the spool ONLY upon successful transaction commit.
-    On failure: rolls back partial writes, retains the record in the spool, logs clearly,
-    and aborts the batch to prevent further errors while preserving unwritten records for retry.
+    
+    Architecture Note:
+    Workspace and Hive metastore landing tables (workspace.edgeshield_db.*) are
+    non-catalog-managed tables and do not support multi-statement SQL transactions
+    (TRANSACTION_NOT_SUPPORTED.WRITE_NON_CATALOG_MANAGED_TABLE). The connection operates
+    in autocommit mode.
+    
+    App-level all-or-nothing spool deletion is the durability guarantee: a spool record is
+    deleted from SQLite ONLY IF every INSERT statement for that payload succeeds without error.
+    If any insert fails, the spool row is retained on disk for safe retry, the error is logged,
+    and the batch is aborted to avoid cascading failures.
+    
     Returns (sent_count, failed_count).
     """
     global _last_flush_status
@@ -308,7 +310,6 @@ def flush_spool_to_databricks() -> Tuple[int, int]:
 
     try:
         connection = get_connection()
-        supports_tx = init_connection_transactions(connection)
         cursor = connection.cursor()
 
         while True:
@@ -322,26 +323,14 @@ def flush_spool_to_databricks() -> Tuple[int, int]:
                     # 1. Execute all conditional inserts for this payload
                     insert_single_payload(cursor, payload, connection=connection)
 
-                    # 2. Commit transaction atomically across all inserts for this payload
-                    if supports_tx:
-                        connection.commit()
-
-                    # 3. Only remove from durable spool AFTER full payload transaction succeeds
+                    # 2. Only remove from durable spool AFTER every insert for this payload succeeds
                     delete_ids([record_id])
                     total_sent += 1
                 except Exception as rec_err:
-                    # 4. Rollback uncommitted inserts for this payload on failure
-                    if supports_tx:
-                        try:
-                            connection.rollback()
-                        except Exception as rb_err:
-                            print(f"[!] Warning: transaction rollback failed for record id={record_id}: {rb_err}")
-
-                    # 5. Leave record in spool, log clearly, abort batch per safe retry design
+                    # 3. Leave record in spool on any insert failure, log clearly, and abort batch for retry
                     print(
                         f"[!] Error inserting record id={record_id} to Databricks "
-                        f"(transaction {'rolled back' if supports_tx else 'aborted'}; "
-                        f"record retained in spool for retry): {rec_err}"
+                        f"(insert failed; spool retained for retry): {rec_err}"
                     )
                     total_failed += 1
                     batch_aborted = True
