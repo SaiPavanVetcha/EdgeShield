@@ -21,7 +21,8 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EdgeShield &bull; Edge Devices &rarr; Lakehouse &rarr; Intelligent Monitoring</title>
+  <title>EdgeShield Central Server &bull; Edge Ingestion &amp; Lakehouse Streaming</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M16 3L5 7.2v8.5c0 7.2 4.7 11.8 11 13.3 6.3-1.5 11-6.1 11-13.3V7.2L16 3z' fill='%23091122' stroke='%2338bdf8' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M9 16.2h3.2l2-3.8 3.6 7.4 2-3.6H23' stroke='%2338bdf8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%2338bdf8'/%3E%3C/svg%3E" />
   <style>
     :root {{
       --bg-page: #080c14;
@@ -54,7 +55,7 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 2rem 1.5rem;
+      padding: 2.5rem 1.5rem;
       background-image: 
         radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.08) 0%, transparent 65%),
         linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
@@ -62,7 +63,7 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       background-size: 100% 100%, 32px 32px, 32px 32px;
     }}
     .container {{
-      max-width: 900px;
+      max-width: 920px;
       width: 100%;
       background: var(--bg-card);
       border: 1px solid var(--border-subtle);
@@ -74,47 +75,55 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       display: flex;
       align-items: center;
       gap: 1.25rem;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.85rem;
     }}
-    .logo-badge {{
-      width: 56px;
-      height: 56px;
-      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
-      border-radius: 16px;
+    .brand-wrap {{
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 1.5rem;
-      color: white;
-      box-shadow: 0 10px 25px -4px rgba(37, 99, 235, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.25);
+      gap: 0.75rem;
     }}
     .wordmark {{
-      background: linear-gradient(135deg, #ffffff 0%, #38bdf8 50%, #60a5fa 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
       font-size: 2.15rem;
       font-weight: 800;
       letter-spacing: -0.03em;
+      line-height: 1;
+    }}
+    .wordmark-edge {{
+      color: #ffffff;
+    }}
+    .wordmark-shield {{
+      color: var(--accent);
+    }}
+    .badge-ver {{
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-weight: 600;
+      vertical-align: middle;
+      margin-left: 0.35rem;
     }}
     .tagline {{
       color: var(--accent);
-      font-size: 0.98rem;
+      font-size: 0.95rem;
       font-weight: 600;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       text-transform: uppercase;
-      margin-top: 0.2rem;
+      margin-top: 0.3rem;
     }}
     .subtitle {{
       color: var(--text-muted);
       font-size: 1.05rem;
       line-height: 1.6;
-      margin-top: 1rem;
+      margin-top: 0.75rem;
       margin-bottom: 2rem;
     }}
-    .status-section {{
-      margin-bottom: 2.25rem;
+    /* Architecture Flow Strip: Edge -> Server -> Lakehouse -> Monitor */
+    .pipeline-section {{
+      margin-bottom: 2rem;
     }}
     .section-label {{
       font-size: 0.72rem;
@@ -123,6 +132,63 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       letter-spacing: 0.08em;
       color: var(--text-dim);
       margin-bottom: 0.85rem;
+    }}
+    .pipeline-strip {{
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+    }}
+    .pipe-node {{
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }}
+    .pipe-badge {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: var(--accent);
+      font-size: 0.95rem;
+      font-weight: 700;
+    }}
+    .pipe-active {{
+      background: rgba(56, 189, 248, 0.25);
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+    }}
+    .pipe-content {{
+      display: flex;
+      flex-direction: column;
+    }}
+    .pipe-title {{
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }}
+    .pipe-sub {{
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }}
+    .pipe-arrow {{
+      color: var(--text-dim);
+      font-size: 1.1rem;
+      font-weight: 700;
+    }}
+    /* Operational Pills */
+    .status-section {{
+      margin-bottom: 2rem;
     }}
     .pills {{
       display: flex;
@@ -133,9 +199,9 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       display: inline-flex;
       align-items: center;
       gap: 0.55rem;
-      padding: 0.5rem 1rem;
+      padding: 0.5rem 0.95rem;
       border-radius: 9999px;
-      font-size: 0.875rem;
+      font-size: 0.85rem;
       font-weight: 600;
       border: 1px solid transparent;
       background: var(--bg-subtle);
@@ -174,7 +240,7 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
     }}
     /* Hero CTA Box */
     .hero-cta-box {{
-      margin-bottom: 2.25rem;
+      margin-bottom: 2rem;
       padding: 1.5rem;
       background: linear-gradient(135deg, rgba(2, 132, 199, 0.15) 0%, rgba(37, 99, 235, 0.08) 100%);
       border: 1px solid rgba(56, 189, 248, 0.3);
@@ -188,7 +254,7 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
     .cta-text {{
       font-size: 1.05rem;
       color: var(--text-main);
-      font-weight: 600;
+      font-weight: 700;
     }}
     .cta-sub {{
       font-size: 0.85rem;
@@ -240,73 +306,8 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       background: rgba(56, 189, 248, 0.08);
       transform: translateY(-2px);
     }}
-    /* 4 Feature Cards Grid */
-    .features-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-      gap: 1.1rem;
-      margin-bottom: 2.25rem;
-    }}
-    .feature-card {{
-      background: var(--bg-subtle);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      padding: 1.25rem;
-      transition: all 0.2s ease;
-    }}
-    .feature-card:hover {{
-      border-color: var(--border-accent);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
-    }}
-    .feature-title {{
-      font-weight: 700;
-      font-size: 0.98rem;
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-    }}
-    .feature-desc {{
-      font-size: 0.84rem;
-      color: var(--text-muted);
-      line-height: 1.55;
-    }}
-    .links-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 0.9rem;
-    }}
-    .link-card {{
-      background: var(--bg-subtle);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 1rem;
-      text-decoration: none;
-      color: var(--text-main);
-      transition: all 0.2s ease;
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }}
-    .link-card:hover {{
-      border-color: var(--accent);
-      background: rgba(56, 189, 248, 0.05);
-      transform: translateY(-2px);
-    }}
-    .link-title {{
-      font-weight: 600;
-      font-size: 0.92rem;
-      color: var(--accent);
-    }}
-    .link-desc {{
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }}
     .footer {{
-      margin-top: 2.25rem;
-      padding-top: 1.5rem;
+      padding-top: 1.25rem;
       border-top: 1px solid var(--border-subtle);
       display: flex;
       flex-wrap: wrap;
@@ -323,24 +324,89 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       border-radius: 4px;
       color: var(--accent);
     }}
+    a.subtle-link {{
+      color: var(--accent);
+      text-decoration: none;
+    }}
+    a.subtle-link:hover {{
+      text-decoration: underline;
+    }}
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- Header with Original Brand SVG Logo -->
     <div class="header">
-      <div class="logo-badge">ES</div>
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 52px; height: 52px; filter: drop-shadow(0 0 14px rgba(56,189,248,0.4)); flex-shrink: 0;">
+        <defs>
+          <linearGradient id="shieldGradLanding" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#38bdf8"/>
+            <stop offset="100%" stop-color="#2563eb"/>
+          </linearGradient>
+          <linearGradient id="pulseGradLanding" x1="7" y1="16" x2="25" y2="16" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#38bdf8"/>
+            <stop offset="50%" stop-color="#7dd3fc"/>
+            <stop offset="100%" stop-color="#60a5fa"/>
+          </linearGradient>
+        </defs>
+        <path d="M16 3L5 7.2v8.5c0 7.2 4.7 11.8 11 13.3 6.3-1.5 11-6.1 11-13.3V7.2L16 3z" fill="#091122" stroke="url(#shieldGradLanding)" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M9 16.2h3.2l2-3.8 3.6 7.4 2-3.6H23" stroke="url(#pulseGradLanding)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="16" cy="16" r="2" fill="#38bdf8"/>
+      </svg>
       <div>
-        <h1 class="wordmark">EdgeShield Central Server</h1>
-        <div class="tagline">Edge Devices &rarr; Lakehouse &rarr; Intelligent Monitoring</div>
+        <div class="brand-wrap">
+          <h1 class="wordmark"><span class="wordmark-edge">Edge</span><span class="wordmark-shield">Shield</span></h1>
+          <span class="badge-ver">Central Server v1.1</span>
+        </div>
+        <div class="tagline">Edge &rarr; Server &rarr; Lakehouse &rarr; Monitor</div>
       </div>
     </div>
+
     <p class="subtitle">
-      Industrial-grade edge telemetry ingestion platform featuring transactional local spooling, dual-mode persistence, and direct Medallion Lakehouse streaming.
+      Industrial-grade edge telemetry ingestion platform featuring durable SQLite spooling, dual-mode persistence, and high-throughput streaming into Databricks Medallion lakehouse tables.
     </p>
 
-    <!-- Operational Status Pills -->
+    <!-- Architecture Strip: Edge → Server → Lakehouse → Monitor -->
+    <div class="pipeline-section">
+      <div class="section-label">Pipeline Architecture</div>
+      <div class="pipeline-strip">
+        <div class="pipe-node">
+          <div class="pipe-badge">1</div>
+          <div class="pipe-content">
+            <span class="pipe-title">Edge Nodes</span>
+            <span class="pipe-sub">PC &amp; ESP32 Agents</span>
+          </div>
+        </div>
+        <div class="pipe-arrow">&rarr;</div>
+        <div class="pipe-node">
+          <div class="pipe-badge pipe-active">2</div>
+          <div class="pipe-content">
+            <span class="pipe-title">Ingest Server</span>
+            <span class="pipe-sub">Durable SQLite Spool</span>
+          </div>
+        </div>
+        <div class="pipe-arrow">&rarr;</div>
+        <div class="pipe-node">
+          <div class="pipe-badge">3</div>
+          <div class="pipe-content">
+            <span class="pipe-title">Lakehouse</span>
+            <span class="pipe-sub">Databricks Medallion</span>
+          </div>
+        </div>
+        <div class="pipe-arrow">&rarr;</div>
+        <div class="pipe-node">
+          <div class="pipe-badge">4</div>
+          <div class="pipe-content">
+            <span class="pipe-title">Monitor</span>
+            <span class="pipe-sub">Real-Time Observability</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Operational Status Pills -->
     <div class="status-section">
-      <div class="section-label">Live Operational Telemetry</div>
+      <div class="section-label">Live Operational Status</div>
       <div class="pills">
         <div class="pill pill-green" title="Ingestion service is active and accepting metrics">
           <span class="dot-pulse"></span> Server: Online
@@ -360,11 +426,11 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
       </div>
     </div>
 
-    <!-- Hero CTA Box with 3 CTAs -->
+    <!-- Hero CTA Box with Actions -->
     <div class="hero-cta-box">
       <div>
-        <div class="cta-text">EdgeShield Server Ops Console</div>
-        <div class="cta-sub">Inspect edge fleet, manage spool flush, toggle storage mode & view live logs</div>
+        <div class="cta-text">EdgeShield Operations Console</div>
+        <div class="cta-sub">Inspect edge fleet, manage spool flush, toggle storage mode &amp; view live health diagnostics</div>
       </div>
       <div class="cta-buttons">
         <a class="btn-cta" href="/console">
@@ -372,66 +438,16 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
           <span>&rarr;</span>
         </a>
         <a class="btn-secondary" href="/health" target="_blank">
-          <span>Health Check</span>
+          <span>Health JSON (/health)</span>
         </a>
-        <a class="btn-secondary" href="/docs" target="_blank">
-          <span>API Docs</span>
+        <a class="btn-secondary" href="/api/console/status" target="_blank">
+          <span>Status API (/api/console/status)</span>
         </a>
       </div>
-    </div>
-
-    <!-- 4 Feature Cards -->
-    <div class="section-label">Architecture &amp; Core Capabilities</div>
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-title">&#x1F4BB; Mixed Edge Clients</div>
-        <div class="feature-desc">
-          High-frequency Windows/Linux PC collectors and ESP32 microcontrollers with room dimension tagging, battery presence gating, and durable SQLite spool fallback.
-        </div>
-      </div>
-      <div class="feature-card">
-        <div class="feature-title">&#x26A1; FastAPI Ingest Hub</div>
-        <div class="feature-desc">
-          Asynchronous, sub-10ms HTTP ingestion engine with atomic SQLite disk commits, zero-loss queuing, and live non-loopback network auto-discovery.
-        </div>
-      </div>
-      <div class="feature-card">
-        <div class="feature-title">&#x1F3D7;&#xFE0F; Databricks Medallion</div>
-        <div class="feature-desc">
-          Automated multi-table Bronze landing (<code>edgeshield_db</code>), Silver schema cleaning with room preservation, and Gold aggregation dimensions (<code>dim_device</code>).
-        </div>
-      </div>
-      <div class="feature-card">
-        <div class="feature-title">&#x1F512; Clean Gold Access</div>
-        <div class="feature-desc">
-          Parameter-safe SQL analytics services, room-scoped KPIs, and intelligent alerting rules that eliminate false positives on AC-powered hardware.
-        </div>
-      </div>
-    </div>
-
-    <!-- Secondary Links Grid -->
-    <div class="section-label">System &amp; Diagnostic Endpoints</div>
-    <div class="links-grid">
-      <a class="link-card" href="/console">
-        <span class="link-title">/console</span>
-        <span class="link-desc">Interactive tabbed control plane</span>
-      </a>
-      <a class="link-card" href="/api/console/status" target="_blank">
-        <span class="link-title">GET /api/console/status</span>
-        <span class="link-desc">Live status, storage mode &amp; spool health</span>
-      </a>
-      <a class="link-card" href="/api/console/devices" target="_blank">
-        <span class="link-title">GET /api/console/devices</span>
-        <span class="link-desc">Connected edge devices registry</span>
-      </a>
-      <a class="link-card" href="/api/console/export?format=jsonl" target="_blank">
-        <span class="link-title">GET /api/console/export</span>
-        <span class="link-desc">Snapshot download of local spool</span>
-      </a>
     </div>
 
     <div class="footer">
-      <span>Primary Host: <code id="footer-adv">{advertised_host}</code> &bull; Bind: <code>{listen_host}:{listen_port}</code></span>
+      <span>Primary Ingest Host: <code id="footer-adv">{advertised_host}</code> &bull; Bind Socket: <code>{listen_host}:{listen_port}</code></span>
       <span id="uptime-display">Uptime: {uptime_sec}s</span>
     </div>
   </div>
@@ -443,27 +459,32 @@ def render_landing_html(status_data: Dict[str, Any]) -> str:
         if (!res.ok) return;
         const data = await res.json();
         if (data.spool) {{
-          document.getElementById('pill-spool').textContent = data.spool.pending;
+          const el = document.getElementById('pill-spool');
+          if (el) el.textContent = data.spool.pending;
         }}
         if (data.devices) {{
-          document.getElementById('pill-devices').textContent = `${{data.devices.online}} online / ${{data.devices.total}} total`;
+          const el = document.getElementById('pill-devices');
+          if (el) el.textContent = `${{data.devices.online}} online / ${{data.devices.total}} total`;
         }}
         if (data.storage_mode) {{
-          document.getElementById('pill-mode').textContent = data.storage_mode.toUpperCase();
+          const el = document.getElementById('pill-mode');
+          if (el) el.textContent = data.storage_mode.toUpperCase();
         }}
         if (data.advertised_url) {{
-          document.getElementById('pill-advertised').textContent = data.advertised_url;
+          const el = document.getElementById('pill-advertised');
+          if (el) el.textContent = data.advertised_url;
         }}
         if (data.advertised_host) {{
           const foot = document.getElementById('footer-adv');
           if (foot) foot.textContent = data.advertised_host;
         }}
         if (data.uptime_seconds !== undefined) {{
-          document.getElementById('uptime-display').textContent = `Uptime: ${{data.uptime_seconds}}s`;
+          const el = document.getElementById('uptime-display');
+          if (el) el.textContent = `Uptime: ${{Math.round(data.uptime_seconds)}}s`;
         }}
       }} catch (err) {{}}
     }}
-    setInterval(refreshStatus, 3000);
+    setInterval(refreshStatus, 4000);
   </script>
 </body>
 </html>"""
@@ -477,6 +498,7 @@ def render_console_html() -> str:
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EdgeShield Server Console</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M16 3L5 7.2v8.5c0 7.2 4.7 11.8 11 13.3 6.3-1.5 11-6.1 11-13.3V7.2L16 3z' fill='%23091122' stroke='%2338bdf8' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M9 16.2h3.2l2-3.8 3.6 7.4 2-3.6H23' stroke='%2338bdf8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%2338bdf8'/%3E%3C/svg%3E" />
   <style>
     :root {{
       --bg-page: #080c14;
@@ -917,8 +939,12 @@ def render_console_html() -> str:
   <!-- Top Bar -->
   <div class="topbar">
     <div class="brand-group">
-      <span class="brand-badge">ES</span>
-      <span class="brand-title">EdgeShield Server Console</span>
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 28px; height: 28px; filter: drop-shadow(0 0 8px rgba(56,189,248,0.4)); flex-shrink: 0;">
+        <path d="M16 3L5 7.2v8.5c0 7.2 4.7 11.8 11 13.3 6.3-1.5 11-6.1 11-13.3V7.2L16 3z" fill="#091122" stroke="#38bdf8" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M9 16.2h3.2l2-3.8 3.6 7.4 2-3.6H23" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="16" cy="16" r="2" fill="#38bdf8"/>
+      </svg>
+      <span class="brand-title"><strong>Edge</strong><span style="color: var(--accent);">Shield</span> Console</span>
       <span class="chip chip-online"><span class="dot-live"></span> Online</span>
     </div>
     <div class="topbar-right">

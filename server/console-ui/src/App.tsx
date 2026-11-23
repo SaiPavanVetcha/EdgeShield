@@ -24,6 +24,7 @@ import { OverviewTab } from './components/OverviewTab';
 import { DevicesTab } from './components/DevicesTab';
 import { SpoolTab } from './components/SpoolTab';
 import { LogsTab } from './components/LogsTab';
+import { BrandLogo } from './components/BrandLogo';
 
 export type TabKey = 'overview' | 'devices' | 'spool' | 'logs';
 
@@ -244,20 +245,10 @@ export const App: React.FC = () => {
       <header className="bg-[#0b1021]/95 backdrop-blur-md border-b border-slate-800/80 px-6 py-3.5 sticky top-0 z-30 shadow-md">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           {/* Logo & Product Title */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-sky-500/20 text-sm border border-sky-400/30">
-              ES
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-bold text-slate-100 tracking-tight">
-                  EdgeShield Server Console
-                </h1>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-400 border border-sky-800/50">
-                  v1.1
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono mt-0.5">
+          <div className="flex items-center gap-4">
+            <BrandLogo size="md" subtitle="Operations Control Plane" />
+            <div className="hidden lg:block border-l border-slate-800 pl-4">
+              <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
                 <span className="text-slate-400">Ingest:</span>
                 <span className="text-sky-300 font-semibold">{advertisedUrl}</span>
                 <button
@@ -491,6 +482,7 @@ export const App: React.FC = () => {
 
           {activeTab === 'logs' && (
             <LogsTab
+              status={status}
               logs={logs}
               isLoading={isLoadingLogs}
               onRefresh={fetchLogs}
