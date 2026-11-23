@@ -86,6 +86,7 @@ Write-Host ""
 
 # 3. Create client/.venv if it does not exist
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
+$VenvPythonw = Join-Path $VenvDir "Scripts\pythonw.exe"
 if (-not (Test-Path $VenvPython)) {
     Write-Host "[*] Creating dedicated virtual environment at $VenvDir..." -ForegroundColor Cyan
     if ($SystemPython -match '^(.+\.exe)\s+(-\d.*)$') {
@@ -253,8 +254,9 @@ if (-not $NonInteractive) {
         # 8. Prompt: Start client now (if auto-start was skipped)
         $StartNow = Read-Host "Start the client agent now in the background? (Y/n)"
         if ($StartNow -notmatch '^[Nn]$') {
-            Write-Host "[*] Launching client agent in background using .venv Python..." -ForegroundColor Cyan
-            Start-Process -FilePath $VenvPython -ArgumentList "`"$ClientScript`"" -WorkingDirectory $ClientDir -WindowStyle Hidden
+            $Launcher = if (Test-Path $VenvPythonw) { $VenvPythonw } else { $VenvPython }
+            Write-Host "[*] Launching client agent in background using $(Split-Path $Launcher -Leaf)..." -ForegroundColor Cyan
+            Start-Process -FilePath $Launcher -ArgumentList "`"$ClientScript`"" -WorkingDirectory $ClientDir -WindowStyle Hidden
             Write-Host "[+] Client agent started in background." -ForegroundColor Green
         }
     }
@@ -267,12 +269,12 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host "         EdgeShield Client Setup Complete!        " -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "[*] Virtual environment: $VenvDir" -ForegroundColor Gray
-Write-Host "[*] Python executable  : $VenvPython" -ForegroundColor Gray
+Write-Host "[*] Python executable  : $(if (Test-Path $VenvPythonw) { $VenvPythonw } else { $VenvPython })" -ForegroundColor Gray
 Write-Host "[*] Configuration file : $EnvFile" -ForegroundColor Gray
 Write-Host "[*] Log output file    : $LogFile" -ForegroundColor Gray
 Write-Host "[*] Live log streaming : Get-Content -Wait -Tail 30 '$LogFile'" -ForegroundColor Yellow
 if ($BootEnabled) {
-    Write-Host "[*] Task query command : Get-ScheduledTask -TaskName 'EdgeShieldClient'" -ForegroundColor Gray
+    Write-Host "[*] Task query command : schtasks /Query /TN 'EdgeShieldClient' /V /FO LIST" -ForegroundColor Gray
     Write-Host "[*] Uninstall task     : powershell -ExecutionPolicy Bypass -File '$ScriptDir\uninstall_windows.ps1'" -ForegroundColor Gray
 } else {
     Write-Host "[*] Manual run command : & '$VenvPython' client.py" -ForegroundColor Gray

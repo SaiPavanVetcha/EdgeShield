@@ -2,9 +2,12 @@ import os
 import socket
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+dotenv_path = os.path.join(BASE_DIR, ".env")
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+else:
+    load_dotenv()
 
 # Server Settings
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")

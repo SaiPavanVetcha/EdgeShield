@@ -148,13 +148,22 @@ chmod +x install_linux.sh uninstall_linux.sh
 * Uninstall: `./uninstall_linux.sh`
 
 ### 2. Windows (Scheduled Task)
-Registers `EdgeShieldClient` in Windows Task Scheduler:
+Registers `EdgeShieldClient` in Windows Task Scheduler. The task executes in the background via `pythonw.exe` without keeping a visible CMD or console window open:
+
 ```powershell
 cd client\install
+# Register for current user at logon (standard user, no Admin required):
 .\install_windows.ps1
+
+# Or register for system boot under SYSTEM (requires Administrator PowerShell):
+.\install_windows.ps1 -AtStartup
 ```
-* Status: `Get-ScheduledTask -TaskName "EdgeShieldClient"`
-* Uninstall: `.\uninstall_windows.ps1`
+
+* **Verify Task:** `schtasks /Query /TN "EdgeShieldClient" /V /FO LIST` (or `Get-ScheduledTask -TaskName "EdgeShieldClient"`)
+* **Run Immediately:** `schtasks /Run /TN "EdgeShieldClient"`
+* **Stop Task:** `schtasks /End /TN "EdgeShieldClient"`
+* **Tail Logs:** `Get-Content -Wait -Tail 30 "client\logs\client.log"`
+* **Uninstall:** `.\uninstall_windows.ps1`
 
 ---
 

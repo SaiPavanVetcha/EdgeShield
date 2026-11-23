@@ -278,3 +278,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         close_session()
         log("\n[*] EdgeShield Client Agent stopped by user.")
+    except Exception as exc:
+        setup_logging()
+        logger.exception(f"Fatal error in EdgeShield Client: {exc}")
+        raise
