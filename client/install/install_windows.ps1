@@ -159,9 +159,20 @@ try {
 } catch {
     Write-Warning "PowerShell ScheduledTask cmdlets failed ($($_.Exception.Message)). Falling back to schtasks.exe..."
     $Sc = if ($AtStartup) { "ONSTART" } else { "ONLOGON" }
-    $TrCommand = "`"$PythonExe`" `"$ClientScript`""
 
-    $schArgs = @("/Create", "/TN", $TaskName, "/TR", $TrCommand, "/SC", $Sc, "/F")
+    # Fallback Approach: Dedicated launcher script client/install/run_client.cmd
+    # Guarantees working directory is set to $ClientDir ('cd /d') before running pythonw.exe detached.
+    $LauncherScript = Join-Path $ScriptDir "run_client.cmd"
+    if (-not (Test-Path $LauncherScript)) {
+        $LauncherContent = @"
+@echo off
+cd /d "$ClientDir"
+start "" "$PythonExe" "$ClientScript" %*
+"@
+        Set-Content -Path $LauncherScript -Value $LauncherContent -Encoding Ascii
+    }
+
+    $schArgs = @("/Create", "/TN", $TaskName, "/TR", "`"$LauncherScript`"", "/SC", $Sc, "/F")
     if ($AtStartup) {
         $schArgs += @("/RU", "SYSTEM", "/RL", "HIGHEST")
     } else {
@@ -182,6 +193,7 @@ Write-Host ""
 Write-Host "==================================================" -ForegroundColor Cyan
 if ($RegisteredSuccessfully) {
     Write-Host "[+] Scheduled Task '$TaskName' successfully registered and started!" -ForegroundColor Green
+    Write-Host "[i] Health Check: Confirm task is Running with 'schtasks /Query /TN `"$TaskName`"' and tail logs with 'Get-Content -Wait -Tail 30 `"$LogPath`"'." -ForegroundColor Cyan
 } else {
     Write-Host "[*] Task configuration prepared for '$TaskName'." -ForegroundColor Yellow
 }
@@ -200,4 +212,11 @@ Write-Host "  Run task immediately : schtasks /Run /TN `"$TaskName`"" -Foregroun
 Write-Host "  Stop task             : schtasks /End /TN `"$TaskName`"" -ForegroundColor Gray
 Write-Host "  Tail client logs      : Get-Content -Wait -Tail 30 `"$LogPath`"" -ForegroundColor Gray
 Write-Host "  Uninstall task        : powershell -ExecutionPolicy Bypass -File `"$ScriptDir\uninstall_windows.ps1`"" -ForegroundColor Gray
+Write-Host ""
+Write-Host "Auto-Start Verification Checklist:" -ForegroundColor Cyan
+Write-Host "  1. Run setup.ps1 -> Select 'Y' to enable auto-start Scheduled Task." -ForegroundColor White
+Write-Host "  2. Close all CMD / PowerShell windows -> Verify metrics still arrive at Central Server." -ForegroundColor White
+Write-Host "  3. Run: schtasks /Query /TN `"$TaskName`" /V /FO LIST" -ForegroundColor White
+Write-Host "     Verify 'Task To Run' points to pythonw.exe and 'Start In' / Working Directory is '$ClientDir'." -ForegroundColor Gray
+Write-Host "  4. Log off and log back in -> Verify agent runs automatically in background without a window." -ForegroundColor White
 Write-Host "==================================================" -ForegroundColor Cyan

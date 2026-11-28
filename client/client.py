@@ -2,6 +2,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 import socket
+import sys
 import time
 from datetime import datetime, timezone
 from typing import Optional, Tuple
@@ -44,12 +45,13 @@ def setup_logging() -> logging.Logger:
     if not logger.handlers:
         formatter = logging.Formatter("%(message)s")
 
-        # Console Stream Handler
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+        # Console Stream Handler (attached only if stdout/stderr available; skipped under pythonw)
+        if sys.stdout is not None or sys.stderr is not None:
+            console_handler = logging.StreamHandler(sys.stdout if sys.stdout is not None else sys.stderr)
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
 
-        # Rotating File Handler (max 5 MB per file, up to 3 backups)
+        # Rotating File Handler (max 5 MB per file, up to 3 backups; always active)
         file_handler = RotatingFileHandler(
             LOG_FILE,
             maxBytes=5 * 1024 * 1024,

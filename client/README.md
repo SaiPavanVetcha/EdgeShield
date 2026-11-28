@@ -159,11 +159,34 @@ cd client\install
 .\install_windows.ps1 -AtStartup
 ```
 
-* **Verify Task:** `schtasks /Query /TN "EdgeShieldClient" /V /FO LIST` (or `Get-ScheduledTask -TaskName "EdgeShieldClient"`)
+* **Health Check (One-Line):**
+  Confirm the task is running and tail telemetry logs:
+  ```powershell
+  schtasks /Query /TN "EdgeShieldClient" ; Get-Content -Wait -Tail 30 "client\logs\client.log"
+  ```
+* **Verify Task Details:** `schtasks /Query /TN "EdgeShieldClient" /V /FO LIST` (or `Get-ScheduledTask -TaskName "EdgeShieldClient"`)
 * **Run Immediately:** `schtasks /Run /TN "EdgeShieldClient"`
 * **Stop Task:** `schtasks /End /TN "EdgeShieldClient"`
 * **Tail Logs:** `Get-Content -Wait -Tail 30 "client\logs\client.log"`
 * **Uninstall:** `.\uninstall_windows.ps1`
+
+> [!NOTE]
+> **Working Directory & Fallback Hardening:**  
+> The Scheduled Task is created with `WorkingDirectory` set to the absolute `client/` folder. If PowerShell ScheduledTask cmdlets are unavailable and fallback to `schtasks.exe` occurs, `install_windows.ps1` uses a dedicated launcher script (`client/install/run_client.cmd`) that explicitly executes `cd /d "%~dp0.."` to anchor the working directory to `client/` and launches `pythonw.exe` detached via `start ""` (preventing console window flash). Furthermore, `client/config.py` normalizes all log and spool paths to absolute paths anchored to the client directory.
+
+#### Auto-Start Verification Checklist
+Follow this verification checklist after installation:
+1. **Guided Setup:** Run `powershell -ExecutionPolicy Bypass -File install\setup.ps1` and select `Y` to enable the auto-start Scheduled Task.
+2. **Close All Windows:** Close all terminal, CMD, and PowerShell windows. Confirm on the Central Server console (`http://<SERVER_IP>:5000/console`) that metrics continue arriving.
+3. **Inspect Task Configuration:** Run:
+   ```cmd
+   schtasks /Query /TN "EdgeShieldClient" /V /FO LIST
+   ```
+   Confirm that:
+   - **Task To Run:** Points to `pythonw.exe` (or `run_client.cmd`) and `client.py`.
+   - **Start In:** Points to the absolute `client` directory.
+   - **Status:** Shows `Running` (or `Ready`).
+4. **Log Off & Log On:** Log off Windows and log back in. Confirm that the agent launches automatically in the background without any CMD or console window, and `client/logs/client.log` continues updating.
 
 ---
 

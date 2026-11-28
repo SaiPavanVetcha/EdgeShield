@@ -28,7 +28,14 @@ FLUSH_INTERVAL = FLUSH_INTERVAL_SECONDS
 FLUSH_MAX_RECORDS = int(os.getenv("FLUSH_MAX_RECORDS", "20"))
 SPOOL_MAX_RECORDS = int(os.getenv("SPOOL_MAX_RECORDS", "5000"))
 SPOOL_DIR = os.getenv("SPOOL_DIR", os.path.join(BASE_DIR, "spool"))
+if not os.path.isabs(SPOOL_DIR):
+    SPOOL_DIR = os.path.abspath(os.path.join(BASE_DIR, SPOOL_DIR))
 
 # Logging Settings
 LOG_DIR = os.getenv("LOG_DIR", os.path.join(BASE_DIR, "logs"))
+if not os.path.isabs(LOG_DIR):
+    LOG_DIR = os.path.abspath(os.path.join(BASE_DIR, LOG_DIR))
+
 LOG_FILE = os.getenv("LOG_FILE", os.path.join(LOG_DIR, "client.log"))
+if not os.path.isabs(LOG_FILE):
+    LOG_FILE = os.path.abspath(os.path.join(LOG_DIR, os.path.basename(LOG_FILE)))

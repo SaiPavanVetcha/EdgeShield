@@ -263,19 +263,28 @@ if (-not $NonInteractive) {
 }
 
 $LogFile = Join-Path $ClientDir "logs\client.log"
+$ResolvedPython = if (Test-Path $VenvPythonw) { $VenvPythonw } else { $VenvPython }
 
 Write-Host ""
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "         EdgeShield Client Setup Complete!        " -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "[*] Virtual environment: $VenvDir" -ForegroundColor Gray
-Write-Host "[*] Python executable  : $(if (Test-Path $VenvPythonw) { $VenvPythonw } else { $VenvPython })" -ForegroundColor Gray
+Write-Host "[*] Python executable  : $ResolvedPython" -ForegroundColor Gray
 Write-Host "[*] Configuration file : $EnvFile" -ForegroundColor Gray
 Write-Host "[*] Log output file    : $LogFile" -ForegroundColor Gray
 Write-Host "[*] Live log streaming : Get-Content -Wait -Tail 30 '$LogFile'" -ForegroundColor Yellow
 if ($BootEnabled) {
+    Write-Host "[*] Auto-Start Task    : EdgeShieldClient" -ForegroundColor Green
+    Write-Host "[*] Task Action Binary : $ResolvedPython (Windowless Background)" -ForegroundColor Green
+    Write-Host "[*] Health Check Note  : Confirm task is Running: schtasks /Query /TN 'EdgeShieldClient' | Tail logs: Get-Content -Wait -Tail 30 '$LogFile'" -ForegroundColor Cyan
     Write-Host "[*] Task query command : schtasks /Query /TN 'EdgeShieldClient' /V /FO LIST" -ForegroundColor Gray
     Write-Host "[*] Uninstall task     : powershell -ExecutionPolicy Bypass -File '$ScriptDir\uninstall_windows.ps1'" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Verification Checklist:" -ForegroundColor Cyan
+    Write-Host "  1. Close all CMD / PowerShell windows -> metrics continue arriving at Central Server." -ForegroundColor Gray
+    Write-Host "  2. Run 'schtasks /Query /TN EdgeShieldClient /V /FO LIST' to confirm Task To Run and Start In." -ForegroundColor Gray
+    Write-Host "  3. Log off and log on -> agent runs automatically in the background without a console window." -ForegroundColor Gray
 } else {
     Write-Host "[*] Manual run command : & '$VenvPython' client.py" -ForegroundColor Gray
     Write-Host "[*] Enable task later  : powershell -ExecutionPolicy Bypass -File '$ScriptDir\install_windows.ps1'" -ForegroundColor Gray
